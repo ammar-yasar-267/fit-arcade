@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://bsplnu074uol0"]
+
+[ext_resource type="Script" uid="uid://c6gw87ou8po7e" path="res://main.gd" id="1_ig7tw"]
+
+[node name="Main" type="Node2D" unique_id=32405924]
+script = ExtResource("1_ig7tw")
+
+[node name="CameraDisplay" type="TextureRect" parent="." unique_id=1436390285]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 640.0
+offset_bottom = 480.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CameraViewport" type="SubViewport" parent="." unique_id=880597754]
+
+[node name="CameraTexture" type="TextureRect" parent="CameraViewport" unique_id=1397539691]
+offset_right = 40.0
+offset_bottom = 40.0

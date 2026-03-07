@@ -11,8 +11,19 @@ config_version=5
 [application]
 
 config/name="FitArcade"
+run/main_scene="uid://bsplnu074uol0"
 config/features=PackedStringArray("4.6", "Mobile")
 config/icon="res://icon.svg"
+
+[autoload]
+
+MediaPipeExternalFiles="*uid://cb4o2nfn533xw"
+GDMPAndroid="*uid://dvytdmjum72sj"
+Global="*uid://47h6h8bbsf7f"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/CameraServerExtension/plugin.cfg", "res://addons/GDMP/plugin.cfg")
 
 [physics]
 
