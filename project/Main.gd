@@ -1,81 +1,170 @@
 extends Control
 
-var tasks_audio := {
-	"Audio Classifier": "res://audio/audio_classifier/AudioClassifier.tscn",
-}
-var tasks_text := {
-	"Text Classifier": "res://text/text_classifier/TextClassifier.tscn",
-	"Language Detector": "res://text/language_detector/LanguageDetector.tscn",
-}
-var tasks_vision := {
-	"Face Detector": "res://vision/face_detector/FaceDetector.tscn",
-	"Face Landmarker": "res://vision/face_landmarker/FaceLandmarker.tscn",
-	"Face Stylizer": "res://vision/face_stylizer/FaceStylizer.tscn",
-	"Gesture Recognizer": "res://vision/gesture_recognizer/GestureRecognizer.tscn",
-	"Hand Landmarker": "res://vision/hand_landmarker/HandLandmarker.tscn",
-	"Holistic Landmarker": "res://vision/holistic_landmarker/HolisticLandmarker.tscn",
-	"Image Classifier": "res://vision/image_classifier/ImageClassifier.tscn",
-	"Image Embedder": "res://vision/image_embedder/ImageEmbedder.tscn",
-	"Image Segmenter": "res://vision/image_segmenter/ImageSegmenter.tscn",
-	"Object Detector": "res://vision/object_detector/ObjectDetector.tscn",
-	"Pose Landmarker": "res://vision/pose_landmarker/PoseLandmarker.tscn",
-}
+## FitArcade Main Menu
+## Flow: Title → Exercise Selection → Game Selection → Session (camera + game)
 
-@onready var btn_back: Button = $VBoxContainer/Title/Back
-@onready var main: Control = $VBoxContainer/Main
-@onready var btn_task_audio: Button = main.get_node("Tasks/Audio")
-@onready var btn_task_text: Button = main.get_node("Tasks/Text")
-@onready var btn_task_vision: Button = main.get_node("Tasks/Vision")
-@onready var tgl_external_files: CheckButton = main.get_node("EnableExternalFiles")
-@onready var select_task: Control = $VBoxContainer/SelectTask
-@onready var lbl_task_type: Label = select_task.get_node("TaskType")
-@onready var lst_tasks: BoxContainer = select_task.get_node("ScrollContainer/Tasks")
-@onready var popup_external_files: ConfirmationDialog = $ExternalFilesPopup
+enum Screen {TITLE, EXERCISES, GAMES, SESSION, SETTINGS}
+
+var current_screen: Screen = Screen.TITLE
+var selected_exercise: String = ""
+var selected_game: String = ""
+
+@onready var title_panel: VBoxContainer = $VBoxContainer/TitlePanel
+@onready var exercise_panel: VBoxContainer = $VBoxContainer/ExercisePanel
+@onready var game_panel: VBoxContainer = $VBoxContainer/GamePanel
+@onready var session_info: Label = $VBoxContainer/SessionInfo
+@onready var btn_back: Button = $VBoxContainer/TopBar/BackButton
+@onready var title_label: Label = $VBoxContainer/TopBar/TitleLabel
+@onready var subtitle_label: Label = $VBoxContainer/TitlePanel/Subtitle
+@onready var exercise_label: Label = $VBoxContainer/ExercisePanel/ExerciseLabel
+@onready var game_label: Label = $VBoxContainer/GamePanel/GameLabel
+@onready var right_spacer: Control = $VBoxContainer/TopBar/RightSpacer
+@onready var exercise_list: VBoxContainer = $VBoxContainer/ExercisePanel/ScrollContainer/ExerciseList
+@onready var game_list: VBoxContainer = $VBoxContainer/GamePanel/ScrollContainer/GameList
 
 func _ready() -> void:
-	btn_back.pressed.connect(self._back)
-	btn_task_audio.pressed.connect(self._select_task.bind("Audio Tasks", tasks_audio))
-	btn_task_text.pressed.connect(self._select_task.bind("Text Tasks", tasks_text))
-	btn_task_vision.pressed.connect(self._select_task.bind("Vision Tasks", tasks_vision))
-	tgl_external_files.toggled.connect(_external_file_toggled)
-	popup_external_files.confirmed.connect(_enable_external_file)
-	if Global.enable_download_files:
-		tgl_external_files.button_pressed = true
+	btn_back.pressed.connect(_go_back)
+	var start_btn: Button = $VBoxContainer/TitlePanel/StartButton
+	start_btn.pressed.connect(_on_start_pressed)
+	var settings_btn: Button = $VBoxContainer/TitlePanel/SettingsButton
+	settings_btn.pressed.connect(_on_settings_pressed)
+	_apply_ui_theme()
+	_show_screen(Screen.TITLE)
+	# Offline-first: rely on bundled model files unless explicitly enabled.
+	Global.enable_download_files = false
 
-func _back() -> void:
+func _apply_ui_theme() -> void:
+	subtitle_label.text = "Move better. Play longer."
+	_style_secondary_button(btn_back)
+	var start_btn: Button = $VBoxContainer/TitlePanel/StartButton
+	start_btn.text = "Start Session"
+	_style_primary_button(start_btn)
+	var settings_btn: Button = $VBoxContainer/TitlePanel/SettingsButton
+	settings_btn.text = "Settings"
+	_style_secondary_button(settings_btn)
+
+func _style_primary_button(btn: Button) -> void:
+	btn.custom_minimum_size = Vector2(0, 72)
+	btn.add_theme_font_size_override("font_size", 30)
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.12, 0.44, 0.33, 1.0)
+	normal.corner_radius_top_left = 14
+	normal.corner_radius_top_right = 14
+	normal.corner_radius_bottom_left = 14
+	normal.corner_radius_bottom_right = 14
+	normal.content_margin_left = 18
+	normal.content_margin_right = 18
+	normal.content_margin_top = 12
+	normal.content_margin_bottom = 12
+	var hover := normal.duplicate()
+	hover.bg_color = Color(0.16, 0.52, 0.39, 1.0)
+	btn.add_theme_stylebox_override("normal", normal)
+	btn.add_theme_stylebox_override("hover", hover)
+
+func _style_secondary_button(btn: Button) -> void:
+	btn.custom_minimum_size = Vector2(92, 52)
+	btn.add_theme_font_size_override("font_size", 24)
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.13, 0.14, 0.18, 0.92)
+	normal.corner_radius_top_left = 12
+	normal.corner_radius_top_right = 12
+	normal.corner_radius_bottom_left = 12
+	normal.corner_radius_bottom_right = 12
+	normal.content_margin_left = 14
+	normal.content_margin_right = 14
+	normal.content_margin_top = 10
+	normal.content_margin_bottom = 10
+	var hover := normal.duplicate()
+	hover.bg_color = Color(0.17, 0.18, 0.24, 0.98)
+	btn.add_theme_stylebox_override("normal", normal)
+	btn.add_theme_stylebox_override("hover", hover)
+
+func _on_start_pressed() -> void:
+	_show_screen(Screen.EXERCISES)
+
+func _on_settings_pressed() -> void:
+	_show_screen(Screen.SETTINGS)
+
+func _show_screen(screen: Screen) -> void:
+	current_screen = screen
+	title_panel.hide()
+	exercise_panel.hide()
+	game_panel.hide()
+	session_info.hide()
 	btn_back.hide()
-	select_task.hide()
-	main.show()
+	right_spacer.hide()
 
-func _select_task(task_type: String, tasks: Dictionary) -> void:
-	lbl_task_type.text = task_type
-	for task in lst_tasks.get_children():
-		task.queue_free()
-	if tasks.is_empty():
-		var label := Label.new()
-		label.text = "Coming Soon™"
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lst_tasks.add_child(label)
-	else:
-		for task in tasks:
-			var button := Button.new()
-			button.text = task
-			button.mouse_filter = Control.MOUSE_FILTER_PASS
-			button.pressed.connect(get_tree().change_scene_to_file.bind(tasks[task]))
-			lst_tasks.add_child(button)
-	main.hide()
-	select_task.show()
-	btn_back.show()
+	match screen:
+		Screen.TITLE:
+			title_label.text = "FitArcade"
+			title_panel.show()
+		Screen.EXERCISES:
+			title_label.text = "Select Exercise"
+			btn_back.show()
+			right_spacer.show()
+			_populate_exercises()
+			exercise_panel.show()
+		Screen.GAMES:
+			title_label.text = "Select Game"
+			btn_back.show()
+			right_spacer.show()
+			_populate_games()
+			game_panel.show()
+		Screen.SESSION:
+			title_label.text = selected_exercise + " → " + selected_game
+			btn_back.show()
+			right_spacer.show()
+			_start_session()
+		Screen.SETTINGS:
+			get_tree().change_scene_to_file("res://SettingsMenu.tscn")
 
-func _external_file_toggled(toggled: bool) -> void:
-	if toggled:
-		if not Global.enable_download_files:
-			popup_external_files.popup_centered_ratio()
-			popup_external_files.content_scale_factor = 2.5
-			tgl_external_files.button_pressed = false
-	else:
-		Global.enable_download_files = false
+func _go_back() -> void:
+	match current_screen:
+		Screen.EXERCISES:
+			_show_screen(Screen.TITLE)
+		Screen.GAMES:
+			_show_screen(Screen.EXERCISES)
+		Screen.SESSION:
+			_end_session()
+			_show_screen(Screen.GAMES)
 
-func _enable_external_file() -> void:
-	Global.enable_download_files = true
-	tgl_external_files.button_pressed = true
+func _populate_exercises() -> void:
+	for child in exercise_list.get_children():
+		child.queue_free()
+
+	for exercise_name in ExerciseManager.get_exercise_names():
+		var btn := Button.new()
+		btn.text = exercise_name
+		_style_primary_button(btn)
+		btn.pressed.connect(_on_exercise_selected.bind(exercise_name))
+		exercise_list.add_child(btn)
+
+func _populate_games() -> void:
+	for child in game_list.get_children():
+		child.queue_free()
+
+	for game_name in GameManager.get_game_names():
+		var btn := Button.new()
+		btn.text = game_name
+		_style_primary_button(btn)
+		btn.pressed.connect(_on_game_selected.bind(game_name))
+		game_list.add_child(btn)
+
+func _on_exercise_selected(exercise_name: String) -> void:
+	selected_exercise = exercise_name
+	ExerciseManager.set_active_exercise(exercise_name)
+	_show_screen(Screen.GAMES)
+
+func _on_game_selected(game_name: String) -> void:
+	selected_game = game_name
+	GameManager.selected_game_name = game_name
+	_show_screen(Screen.SESSION)
+
+func _start_session() -> void:
+	# Change to the pose landmarker scene which handles camera + game
+	var scene_path := "res://vision/pose_landmarker/PoseLandmarker.tscn"
+	get_tree().change_scene_to_file(scene_path)
+
+func _end_session() -> void:
+	ExerciseManager.stop_exercise()
+	GameManager.clear_active_game()

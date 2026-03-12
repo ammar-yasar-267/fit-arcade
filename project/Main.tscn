@@ -1,121 +1,123 @@
-[gd_scene load_steps=4 format=3 uid="uid://c5lpjegcml0ma"]
+[gd_scene format=3 uid="uid://c5lpjegcml0ma"]
 
-[ext_resource type="Script" uid="uid://c8u82td85krxv" path="res://Main.gd" id="2"]
+[ext_resource type="Script" uid="uid://c8u82td85krxv" path="res://Main.gd" id="1_main"]
 
-[sub_resource type="Theme" id="Theme_kq557"]
-default_font_size = 48
-
-[sub_resource type="Theme" id="Theme_0h4gy"]
-default_font_size = 48
-
-[node name="Main" type="MarginContainer"]
+[node name="Main" type="MarginContainer" unique_id=920699001]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 32
-theme_override_constants/margin_top = 32
-theme_override_constants/margin_right = 32
-theme_override_constants/margin_bottom = 32
-script = ExtResource("2")
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+script = ExtResource("1_main")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="."]
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=847322580]
 layout_mode = 2
-theme_override_constants/separation = 32
+theme_override_constants/separation = 24
 
-[node name="Title" type="Label" parent="VBoxContainer"]
+[node name="TopBar" type="HBoxContainer" parent="VBoxContainer" unique_id=21419151]
 layout_mode = 2
-theme_override_font_sizes/font_size = 80
-text = "GDMP Demo"
-horizontal_alignment = 1
-vertical_alignment = 1
+theme_override_constants/separation = 16
 
-[node name="Back" type="Button" parent="VBoxContainer/Title"]
+[node name="BackButton" type="Button" parent="VBoxContainer/TopBar" unique_id=1251684349]
 visible = false
-layout_mode = 1
-anchors_preset = -1
-anchor_top = 0.5
-anchor_right = 0.2
-anchor_bottom = 0.5
-grow_vertical = 2
-theme_override_font_sizes/font_size = 48
+custom_minimum_size = Vector2(80, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
 text = "Back"
 
-[node name="Main" type="Control" parent="VBoxContainer"]
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="Tasks" type="GridContainer" parent="VBoxContainer/Main"]
-layout_mode = 1
-anchors_preset = -1
-anchor_top = 0.1
-anchor_right = 1.0
-anchor_bottom = 0.75
-theme = SubResource("Theme_kq557")
-theme_override_constants/h_separation = 32
-theme_override_constants/v_separation = 32
-columns = 3
-
-[node name="Audio" type="Button" parent="VBoxContainer/Main/Tasks"]
+[node name="TitleLabel" type="Label" parent="VBoxContainer/TopBar" unique_id=459468474]
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
-text = "Audio Tasks"
-
-[node name="Text" type="Button" parent="VBoxContainer/Main/Tasks"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-text = "Text Tasks"
-
-[node name="Vision" type="Button" parent="VBoxContainer/Main/Tasks"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-text = "Vision Tasks"
-
-[node name="EnableExternalFiles" type="CheckButton" parent="VBoxContainer/Main"]
-layout_mode = 1
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -22.0
-offset_top = -24.0
-offset_right = 22.0
-grow_horizontal = 2
-grow_vertical = 0
-theme_override_font_sizes/font_size = 32
-text = "Enable Downloading External Files"
-
-[node name="SelectTask" type="HBoxContainer" parent="VBoxContainer"]
-visible = false
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 32
-
-[node name="TaskType" type="Label" parent="VBoxContainer/SelectTask"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 64
+theme_override_font_sizes/font_size = 48
+text = "FitArcade"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="ScrollContainer" type="ScrollContainer" parent="VBoxContainer/SelectTask"]
+[node name="RightSpacer" type="Control" parent="VBoxContainer/TopBar" unique_id=1251684350]
+visible = false
+custom_minimum_size = Vector2(80, 48)
 layout_mode = 2
-size_flags_horizontal = 3
 
-[node name="Tasks" type="VBoxContainer" parent="VBoxContainer/SelectTask/ScrollContainer"]
+[node name="TitlePanel" type="VBoxContainer" parent="VBoxContainer" unique_id=263156561]
+layout_mode = 2
+size_flags_vertical = 3
+alignment = 1
+
+[node name="Subtitle" type="Label" parent="VBoxContainer/TitlePanel" unique_id=856684378]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Exercise your way through the game!"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="VBoxContainer/TitlePanel" unique_id=1303869123]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+
+[node name="StartButton" type="Button" parent="VBoxContainer/TitlePanel" unique_id=1218908940]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "Start"
+
+[node name="SettingsButton" type="Button" parent="VBoxContainer/TitlePanel" unique_id=1223458941]
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Settings"
+
+[node name="ExercisePanel" type="VBoxContainer" parent="VBoxContainer" unique_id=79120206]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ExerciseLabel" type="Label" parent="VBoxContainer/ExercisePanel" unique_id=314100886]
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = ""
+horizontal_alignment = 1
+
+[node name="ScrollContainer" type="ScrollContainer" parent="VBoxContainer/ExercisePanel" unique_id=1576391860]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ExerciseList" type="VBoxContainer" parent="VBoxContainer/ExercisePanel/ScrollContainer" unique_id=1804330925]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme = SubResource("Theme_0h4gy")
-theme_override_constants/separation = 48
+theme_override_constants/separation = 16
 alignment = 1
 
-[node name="ExternalFilesPopup" type="ConfirmationDialog" parent="."]
-dialog_text = "GDMP Demo requires internet connection to download model assets from Google Cloud Storage.
-By enabling this option, your IP address may be revealed to Google, continue?"
-dialog_autowrap = true
+[node name="GamePanel" type="VBoxContainer" parent="VBoxContainer" unique_id=732122652]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="GameLabel" type="Label" parent="VBoxContainer/GamePanel" unique_id=1866459776]
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = ""
+horizontal_alignment = 1
+
+[node name="ScrollContainer" type="ScrollContainer" parent="VBoxContainer/GamePanel" unique_id=1215415397]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="GameList" type="VBoxContainer" parent="VBoxContainer/GamePanel/ScrollContainer" unique_id=2105729621]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="SessionInfo" type="Label" parent="VBoxContainer" unique_id=455508732]
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Loading..."
+horizontal_alignment = 1

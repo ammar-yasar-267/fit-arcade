@@ -10,32 +10,40 @@ config_version=5
 
 [application]
 
-config/name="GDMP Demo"
-config/description="Demo project for GDMP plugin"
+config/name="FitArcade"
+config/description="Mobile exergaming app — exercise your way through the game!"
 run/main_scene="uid://c5lpjegcml0ma"
-config/features=PackedStringArray("4.5", "GL Compatibility")
+config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
-
-[audio]
-
-driver/enable_input=true
 
 [autoload]
 
-MediaPipeExternalFiles="*res://addons/GDMP/MediaPipeExternalFiles.gd"
-GDMPAndroid="*res://addons/GDMP/GDMPAndroid.gd"
+MediaPipeExternalFiles="*uid://dsyuq4kjrnbs4"
+GDMPAndroid="*uid://cdvhdf5dmteib"
 Global="*res://Global.gd"
+Settings="*res://Settings.gd"
+ExerciseManager="*res://exercises/ExerciseManager.gd"
+GameManager="*res://games/GameManager.gd"
 
 [display]
 
+window/size/viewport_width=540
+window/size/viewport_height=960
+window/size/window_width_override=405
+window/size/window_height_override=720
 window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/CameraServerExtension/plugin.cfg", "res://addons/GDMP/plugin.cfg", "res://addons/gut/plugin.cfg")
+enabled=PackedStringArray("res://addons/CameraServerExtension/plugin.cfg", "res://addons/GDMP/plugin.cfg")
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
 
 [rendering]
 
-renderer/rendering_method="gl_compatibility"
-renderer/rendering_method.mobile="gl_compatibility"
+renderer/rendering_method="mobile"
 textures/vram_compression/import_etc2_astc=true

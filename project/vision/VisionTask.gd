@@ -2,24 +2,20 @@ class_name VisionTask
 extends Control
 
 var request: HTTPRequest
-var running_mode := MediaPipeVisionTask.RUNNING_MODE_IMAGE
+var running_mode := MediaPipeVisionTask.RUNNING_MODE_LIVE_STREAM
 var delegate := MediaPipeTaskBaseOptions.DELEGATE_CPU
 var camera_extension: CameraServerExtension
 var camera_feed
-var image_file_web: FileAccessWeb
-var video_file_web: FileAccessWeb
+var frame_capture_in_progress := false
+var last_frame_ts_ms := 0
+var min_frame_interval_ms := 33
 
 @onready var external_files_disabled: Label = $VBoxContainer/ExternalFileDisabled
 @onready var progress_bar: ProgressBar = $VBoxContainer/ProgressBar
 @onready var image_view: TextureRect = $VBoxContainer/Image
-@onready var video_player: VideoStreamPlayer = $Video
 @onready var btn_back: Button = $VBoxContainer/Title/Back
 @onready var opt_delegate: OptionButton = $VBoxContainer/Title/OptionDelegate
-@onready var btn_load_image: Button = $VBoxContainer/Buttons/LoadImage
-@onready var btn_load_video: Button = $VBoxContainer/Buttons/LoadVideo
 @onready var btn_open_camera: Button = $VBoxContainer/Buttons/OpenCamera
-@onready var image_file_dialog: FileDialog = $ImageFileDialog
-@onready var video_file_dialog: FileDialog = $VideoFileDialog
 @onready var select_camera_dialog: ConfirmationDialog = $SelectCamera
 @onready var opt_camera_feed: OptionButton = $SelectCamera/VBoxContainer/SelectFeed
 @onready var opt_camera_format: OptionButton = $SelectCamera/VBoxContainer/SelectFormat
@@ -36,16 +32,7 @@ func _exit_tree() -> void:
 func _ready():
 	btn_back.pressed.connect(self._back)
 	opt_delegate.item_selected.connect(self._delegate_selected)
-	btn_load_image.pressed.connect(self._open_image)
-	btn_load_video.pressed.connect(self._open_video)
 	btn_open_camera.pressed.connect(self._open_camera)
-	image_file_dialog.file_selected.connect(self._load_image)
-	video_file_dialog.file_selected.connect(self._load_video)
-	if OS.get_name() == "Web":
-		image_file_web = FileAccessWeb.new()
-		video_file_web = FileAccessWeb.new()
-		image_file_web.loaded.connect(self._load_image_web)
-		video_file_web.loaded.connect(self._load_video_web)
 	CameraServer.camera_feed_added.connect(self._camera_added)
 	CameraServer.camera_feed_removed.connect(self._camera_removed)
 	CameraServer.camera_feeds_updated.connect(self._camera_feeds_updated)
@@ -63,22 +50,8 @@ func _process(_delta: float) -> void:
 		var max_size := request.get_body_size()
 		var cur_size := request.get_downloaded_bytes()
 		progress_bar.value = round(float(cur_size) / float(max_size) * 100)
-	if video_player.is_playing():
-		var texture := video_player.get_video_texture()
-		if texture:
-			var image := texture.get_image()
-			if image:
-				if not running_mode == MediaPipeVisionTask.RUNNING_MODE_VIDEO:
-					running_mode = MediaPipeVisionTask.RUNNING_MODE_VIDEO
-					_init_task()
-				if delegate == MediaPipeTaskBaseOptions.DELEGATE_GPU:
-					image.convert(Image.FORMAT_RGBA8)
-				else:
-					image.convert(Image.FORMAT_RGB8)
-				_process_video(image, Time.get_ticks_msec())
 
 func _reset() -> void:
-	video_player.stop()
 	if camera_feed == null:
 		return
 	camera_feed.feed_is_active = false
@@ -89,7 +62,7 @@ func _reset() -> void:
 
 func _back() -> void:
 	_reset()
-	Global.go_to_main_scene()
+	get_tree().change_scene_to_file("res://Main.tscn")
 
 func _delegate_selected(index: int) -> void:
 	_reset()
@@ -106,55 +79,12 @@ func _init_task() -> void:
 	opt_delegate.disabled = false
 	if not OS.get_name() in ["Android", "iOS", "Linux"]:
 		opt_delegate.set_item_disabled(1, true)
-	btn_load_image.disabled = false
-	if OS.get_name() != "Web":
-		btn_load_video.disabled = false
-		btn_open_camera.disabled = false
+	# Read settings: frame interval and delegate preference
+	min_frame_interval_ms = Settings.frame_interval_ms
+	delegate = Settings.delegate
+	opt_delegate.select(delegate)
+	btn_open_camera.disabled = false
 
-func _open_image() -> void:
-	_reset()
-	if OS.get_name() == "Web":
-		image_file_web.open("*.bmp, *.jpg, *.png")
-	else:
-		image_file_dialog.popup_centered_ratio()
-
-func _load_image(path: String) -> void:
-	if not running_mode == MediaPipeVisionTask.RUNNING_MODE_IMAGE:
-		running_mode = MediaPipeVisionTask.RUNNING_MODE_IMAGE
-		_init_task()
-	var image := Image.load_from_file(path)
-	if delegate == MediaPipeTaskBaseOptions.DELEGATE_GPU:
-		image.convert(Image.FORMAT_RGBA8)
-	else:
-		image.convert(Image.FORMAT_RGB8)
-	_process_image(image)
-
-func _load_image_web(_file_name: String, type: String, base64_data: String) -> void:
-	var data := Marshalls.base64_to_raw(base64_data)
-	var image := Image.new()
-	if type == "image/jpeg":
-		image.load_jpg_from_buffer(data)
-	elif type == "image/png":
-		image.load_png_from_buffer(data)
-	elif type == "image/bmp":
-		image.load_bmp_from_buffer(data)
-	_process_image(image)
-
-func _open_video() -> void:
-	_reset()
-	if OS.get_name() == "Web":
-		pass
-	else:
-		video_file_dialog.popup_centered_ratio()
-
-func _load_video(path: String) -> void:
-	var stream: VideoStream = load(path)
-	video_player.stream = stream
-	video_player.play()
-
-func _load_video_web(_file_name: String, _type: String, _base64_data: String) -> void:
-	# no support yet
-	pass
 
 func _open_camera() -> void:
 	_reset()
@@ -313,21 +243,43 @@ func _camera_format_changed() -> void:
 func _camera_frame_changed() -> void:
 	if camera_texture == null:
 		return
+	if frame_capture_in_progress:
+		return
+	var now_ms := Time.get_ticks_msec()
+	if now_ms - last_frame_ts_ms < min_frame_interval_ms:
+		return
+	frame_capture_in_progress = true
 	await RenderingServer.frame_post_draw
 	if camera_viewport == null:
+		frame_capture_in_progress = false
 		return
 	var texture := camera_viewport.get_texture()
 	if texture == null:
+		frame_capture_in_progress = false
 		return
 	var image = texture.get_image()
 	if image == null:
+		frame_capture_in_progress = false
 		return
 	if delegate == MediaPipeTaskBaseOptions.DELEGATE_GPU:
 		image.convert(Image.FORMAT_RGBA8)
 	else:
 		image.convert(Image.FORMAT_RGB8)
+	# Always show a live preview, even if task/model init is not ready yet.
+	if image_view and image_view.visible:
+		update_image(image)
+	# Scale down for inference — pose landmarker doesn't need full resolution
+	# and smaller images dramatically reduce MediaPipe processing time.
+	var infer_image: Image = image
+	var max_infer_dim := Settings.infer_max_dim
+	if image.get_width() > max_infer_dim or image.get_height() > max_infer_dim:
+		var scale := float(max_infer_dim) / float(max(image.get_width(), image.get_height()))
+		infer_image = image.duplicate()
+		infer_image.resize(int(image.get_width() * scale), int(image.get_height() * scale), Image.INTERPOLATE_BILINEAR)
 	var img := MediaPipeImage.new()
-	img.set_image(image)
+	img.set_image(infer_image)
+	last_frame_ts_ms = now_ms
+	frame_capture_in_progress = false
 	_camera_frame(img)
 
 func _camera_frame(image: MediaPipeImage) -> void:
@@ -338,12 +290,6 @@ func _camera_frame(image: MediaPipeImage) -> void:
 		image.convert_to_cpu()
 	_process_camera(image, Time.get_ticks_msec())
 
-func _process_image(_image: Image) -> void:
-	pass
-
-func _process_video(_image: Image, _timestamp_ms: int) -> void:
-	pass
-
 func _process_camera(_image: MediaPipeImage, _timestamp_ms: int) -> void:
 	pass
 
@@ -351,7 +297,19 @@ func get_external_model(path: String) -> FileAccess:
 	var file := Global.get_model(path)
 	if file != null:
 		return file
-	image_view.hide()
+	# Offline fallback: prefer packaged model files in project resources.
+	var bundled_candidates := [
+		"res://models/" + path,
+		"res://" + path,
+	]
+	for bundled_path in bundled_candidates:
+		if FileAccess.file_exists(bundled_path):
+			file = FileAccess.open(bundled_path, FileAccess.READ)
+			if file != null:
+				return file
+	# Keep preview visible while model is being fetched.
+	if image_view:
+		image_view.show()
 	request = Global.get_external_model(path, _get_external_file)
 	if request != null:
 		progress_bar.show()
