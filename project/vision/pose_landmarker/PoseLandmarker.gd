@@ -127,12 +127,14 @@ func _select_camera() -> void:
 	_start_camera()
 
 func _start_exercise_and_game() -> void:
-	# Start the active exercise
-	ExerciseManager.start_exercise()
-
-	# Load and start the game
 	var game_name: String = GameManager.selected_game_name
+	
 	if game_name != "":
+		# GAME MODE: hide full-screen camera, use PIP preview only
+		if image_view:
+			image_view.hide()
+		$VBoxContainer.hide()
+		
 		var scene_path := GameManager.get_game_scene_path(game_name)
 		if scene_path != "":
 			var game_scene := load(scene_path) as PackedScene
@@ -143,9 +145,18 @@ func _start_exercise_and_game() -> void:
 					GameManager.set_active_game(game_instance)
 					game_instance.start_game()
 					game_instance.game_over.connect(_on_game_over)
-
-	# Create PIP pose preview overlay on top of everything
-	_create_pose_preview()
+		_create_pose_preview()
+	else:
+		# CALIBRATION MODE: show full-screen camera feed
+		$VBoxContainer.show()
+		if $VBoxContainer.has_node("Title"): $VBoxContainer/Title.hide()
+		if $VBoxContainer.has_node("Buttons"): $VBoxContainer/Buttons.hide()
+		if $VBoxContainer.has_node("ExternalFileDisabled"): $VBoxContainer/ExternalFileDisabled.hide()
+		if $VBoxContainer.has_node("ProgressBar"): $VBoxContainer/ProgressBar.hide()
+		if image_view:
+			image_view.show()
+			image_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			image_view.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 
 func _create_pose_preview() -> void:
 	pose_canvas = CanvasLayer.new()
@@ -227,33 +238,69 @@ func _create_pose_preview() -> void:
 	add_child(pose_canvas)
 
 	# Connect exercise signals for debug display
-	ExerciseManager.rep_completed.connect(_on_preview_rep)
-	ExerciseManager.form_invalid.connect(_on_preview_form)
-	if ExerciseManager.get_active_exercise():
-		ExerciseManager.get_active_exercise().state_changed.connect(_on_preview_state)
+	ExerciseRecognizer.rep_completed.connect(_on_preview_rep)
+	ExerciseRecognizer.form_feedback.connect(_on_preview_form)
 
-func _on_preview_rep(rep_count: int) -> void:
+func _on_preview_rep() -> void:
 	if state_label:
-		state_label.text = "Reps: %d" % rep_count
+		state_label.text = "Reps: %d" % SessionManager.current_reps
 
-func _on_preview_form(message: String) -> void:
+func _on_preview_form(message: String, is_good: bool) -> void:
 	if state_label:
-		state_label.text = "Reps: %d | %s" % [ExerciseManager.get_active_exercise().rep_count if ExerciseManager.get_active_exercise() else 0, message]
+		state_label.text = "Reps: %d | %s" % [SessionManager.current_reps, message]
 
 func _on_preview_state(new_state: int) -> void:
 	pass
 
 func _get_state_name(state: int) -> String:
 	match state:
-		ExerciseBase.State.IDLE: return "IDLE"
-		ExerciseBase.State.START_POSITION: return "START"
-		ExerciseBase.State.MOVEMENT_PHASE: return "MOVING"
-		ExerciseBase.State.END_POSITION: return "END"
-		ExerciseBase.State.REP_COUNTED: return "REP!"
+		ExerciseRecognizer.State.IDLE: return "IDLE"
+		ExerciseRecognizer.State.START_POSITION: return "START"
+		ExerciseRecognizer.State.MOVEMENT_PHASE: return "MOVING"
+		ExerciseRecognizer.State.END_POSITION: return "END"
+		ExerciseRecognizer.State.REP_COUNTED: return "REP!"
 		_: return "?"
 
-func _on_game_over(_score: int) -> void:
-	ExerciseManager.stop_exercise()
+func _on_game_over(score: int) -> void:
+	ExerciseRecognizer.set_active_exercise("")
+	
+	var overlay = ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.85)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	
+	var vbox = VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 32)
+	overlay.add_child(vbox)
+	
+	var title = Label.new()
+	title.text = "GAME OVER"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 64)
+	title.add_theme_color_override("font_color", Color("#06B6D4")) # Arcade Cyan
+	vbox.add_child(title)
+	
+	var score_label = Label.new()
+	score_label.text = "Final Score: " + str(score) + "\nTotal Reps: " + str(SessionManager.current_reps)
+	score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	score_label.add_theme_font_size_override("font_size", 32)
+	vbox.add_child(score_label)
+	
+	var return_btn = Button.new()
+	return_btn.text = "Return to Menu"
+	return_btn.add_theme_font_size_override("font_size", 36)
+	return_btn.custom_minimum_size = Vector2(300, 80)
+	return_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	return_btn.pressed.connect(func():
+		get_tree().change_scene_to_file("res://Main.tscn")
+	)
+	vbox.add_child(return_btn)
+	
+	if pose_canvas:
+		pose_canvas.add_child(overlay)
+	else:
+		add_child(overlay)
 
 func _camera_frame(image: MediaPipeImage) -> void:
 	# Update pose preview with every captured frame for smooth display,
@@ -298,11 +345,10 @@ func show_result(image: MediaPipeImage, result: MediaPipePoseLandmarkerResult) -
 				tex.call_deferred("set_image", img)
 	# Forward landmarks to exercise recognition system
 	if result.pose_landmarks.size() > 0:
-		ExerciseManager.process_landmarks(result.pose_landmarks[0])
+		ExerciseRecognizer.process_pose(result.pose_landmarks[0])
 
 func _exit_tree() -> void:
 	super ()
-	ExerciseManager.stop_exercise()
 	GameManager.clear_active_game()
 	if game_instance:
 		game_instance.queue_free()

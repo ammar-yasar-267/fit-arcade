@@ -1,0 +1,26 @@
+[gd_resource type="Theme" format=3 uid="uid://cxabxt2j3v3v3"]
+
+[ext_resource type="FontFile" uid="uid://c3x6wysjlpvtv" path="res://fonts/Space_Grotesk/SpaceGrotesk-VariableFont_wght.ttf" id="1_01tl5"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
+bg_color = Color(0.0235, 0.7137, 0.8313, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2"]
+bg_color = Color(0.1019, 0.0862, 0.2509, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[resource]
+default_font = ExtResource("1_01tl5")
+Button/colors/font_color = Color(1, 1, 1, 1)
+Button/colors/font_focus_color = Color(0.9803, 0.8, 0.0823, 1)
+Button/colors/font_hover_color = Color(0.0549, 0.647, 0.9137, 1)
+Button/colors/font_pressed_color = Color(0.4862, 0.2274, 0.9294, 1)
+Button/styles/normal = SubResource("StyleBoxFlat_1")
+PanelContainer/styles/panel = SubResource("StyleBoxFlat_2")

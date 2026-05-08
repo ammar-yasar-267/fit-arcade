@@ -22,7 +22,9 @@ MediaPipeExternalFiles="*uid://dsyuq4kjrnbs4"
 GDMPAndroid="*uid://cdvhdf5dmteib"
 Global="*res://Global.gd"
 Settings="*res://Settings.gd"
-ExerciseManager="*res://exercises/ExerciseManager.gd"
+CalibrationManager="*res://core/CalibrationManager.gd"
+SessionManager="*res://core/SessionManager.gd"
+ExerciseRecognizer="*res://core/ExerciseRecognizer.gd"
 GameManager="*res://games/GameManager.gd"
 
 [display]

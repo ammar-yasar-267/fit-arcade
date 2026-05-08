@@ -30,30 +30,41 @@ func _get_angle_thresholds() -> Dictionary:
 		"end_min": Settings.arm_raise_end_min,
 	}
 
-func _get_landmark_indices() -> Array[int]:
-	# hip - shoulder - wrist (angle measured at shoulder)
-	return [HIP_INDEX, SHOULDER_INDEX, WRIST_INDEX]
+func process_frame(landmarks: MediaPipeNormalizedLandmarks, current_state: ExerciseRecognizer.State) -> ExerciseRecognizer.State:
+	var l_hip = get_landmark_pos(landmarks, HIP_INDEX)
+	var l_shoulder = get_landmark_pos(landmarks, SHOULDER_INDEX)
+	var l_wrist = get_landmark_pos(landmarks, WRIST_INDEX)
+	var left_angle = calculate_angle(l_hip, l_shoulder, l_wrist)
 
-func _get_form_correction_message() -> String:
-	return "Raise your arms smoothly overhead"
+	var r_hip = get_landmark_pos(landmarks, R_HIP_INDEX)
+	var r_shoulder = get_landmark_pos(landmarks, R_SHOULDER_INDEX)
+	var r_wrist = get_landmark_pos(landmarks, R_WRIST_INDEX)
+	var right_angle = calculate_angle(r_hip, r_shoulder, r_wrist)
 
-## Override to use average of both arms for more robust detection
-func analyze_landmarks(landmarks: MediaPipeNormalizedLandmarks) -> void:
-	if not is_active:
-		return
-
-	# Left side
-	var l_hip := get_landmark_pos(landmarks, HIP_INDEX)
-	var l_shoulder := get_landmark_pos(landmarks, SHOULDER_INDEX)
-	var l_wrist := get_landmark_pos(landmarks, WRIST_INDEX)
-	var left_angle := calculate_angle(l_hip, l_shoulder, l_wrist)
-
-	# Right side
-	var r_hip := get_landmark_pos(landmarks, R_HIP_INDEX)
-	var r_shoulder := get_landmark_pos(landmarks, R_SHOULDER_INDEX)
-	var r_wrist := get_landmark_pos(landmarks, R_WRIST_INDEX)
-	var right_angle := calculate_angle(r_hip, r_shoulder, r_wrist)
-
-	# Use the leading arm so one weak/noisy side does not suppress rep detection.
-	var rep_angle: float = max(left_angle, right_angle)
-	_update_fsm(rep_angle)
+	var rep_angle = max(left_angle, right_angle)
+	var thresholds = _get_angle_thresholds()
+	var start_max = thresholds.get("start_max", 30.0)
+	var end_min = thresholds.get("end_min", 150.0)
+	
+	var is_start = rep_angle <= start_max
+	var is_end = rep_angle >= end_min
+	
+	match current_state:
+		ExerciseRecognizer.State.IDLE, ExerciseRecognizer.State.REP_COUNTED, ExerciseRecognizer.State.INVALID:
+			if is_start:
+				return ExerciseRecognizer.State.START_POSITION
+			return ExerciseRecognizer.State.IDLE
+		ExerciseRecognizer.State.START_POSITION:
+			if is_end:
+				return ExerciseRecognizer.State.END_POSITION
+			elif not is_start and not is_end:
+				return ExerciseRecognizer.State.MOVEMENT_PHASE
+		ExerciseRecognizer.State.MOVEMENT_PHASE:
+			if is_end:
+				return ExerciseRecognizer.State.END_POSITION
+			elif is_start:
+				return ExerciseRecognizer.State.START_POSITION
+		ExerciseRecognizer.State.END_POSITION:
+			return ExerciseRecognizer.State.REP_COUNTED
+			
+	return current_state
