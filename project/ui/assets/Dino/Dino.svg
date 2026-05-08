@@ -1,0 +1,16 @@
+<svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="40" cy="40" r="30" fill="#0EA5E9" opacity="0.15" />
+  
+  <path d="M 50 15 L 70 15 L 70 25 L 60 25 L 60 30 L 50 30 Z" fill="#06B6D4" />
+  
+  <rect x="55" y="18" width="4" height="4" fill="#FFFFFF" />
+  
+  <path d="M 40 30 L 50 30 L 50 45 L 20 45 L 30 30 Z" fill="#06B6D4" />
+  
+  <path d="M 10 35 L 20 45 L 20 35 Z" fill="#06B6D4" />
+  
+  <path d="M 25 45 L 25 55 L 35 55 L 35 65" stroke="#0EA5E9" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter" fill="none" />
+  <path d="M 40 45 L 40 60 L 50 60 L 50 70" stroke="#06B6D4" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter" fill="none" />
+  
+  <path d="M 45 35 L 55 35 L 55 40" stroke="#06B6D4" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" fill="none" />
+</svg>

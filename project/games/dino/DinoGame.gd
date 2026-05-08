@@ -1,6 +1,9 @@
 extends GameBase
 
-var player: ColorRect
+const PLAYER_TEXTURE: Texture2D = preload("res://ui/assets/dino/Dino.svg")
+const OBSTACLE_TEXTURE: Texture2D = preload("res://ui/assets/dino/Dino-Neon-Cactus.svg")
+
+var player: Sprite2D
 var hud: CanvasLayer
 var ground: ColorRect
 var obstacle_container: Node2D
@@ -17,6 +20,10 @@ func _ready():
 	ExerciseRecognizer.set_active_exercise("Jumping Jacks")
 	
 	player = $Player
+	player.texture = PLAYER_TEXTURE
+	player.centered = false
+	# Increase player size to match app visuals
+	player.scale = Vector2(0.9, 0.9)
 	hud = $HUD
 	ground = $Ground
 	obstacle_container = $Obstacles
@@ -56,8 +63,10 @@ func _process(delta):
 			add_score(1)
 			hud.update_score(score)
 		
-		# Collision
-		if abs(obs.position.x - player.position.x) < 40 and abs(obs.position.y - player.position.y) < 40:
+		# Collision (adjusted for larger sprite dimensions)
+		var player_rect = Rect2(player.position.x, player.position.y, 60, 60)
+		var obs_rect = Rect2(obs.position.x, obs.position.y, 60, 80)
+		if player_rect.intersects(obs_rect):
 			end_game()
 
 func on_rep_completed(rep_count: int) -> void:
@@ -67,8 +76,11 @@ func on_rep_completed(rep_count: int) -> void:
 		velocity_y = jump_velocity
 
 func _spawn_obstacle():
-	var obs = ColorRect.new()
-	obs.color = Color("#EF4444")
-	obs.size = Vector2(40, 60)
-	obs.position = Vector2(600, 480)
+	var obs = Sprite2D.new()
+	obs.texture = OBSTACLE_TEXTURE
+	obs.centered = false
+	# Make obstacle larger and place it on the ground level
+	obs.scale = Vector2(0.9, 0.9)
+	# Position aligned roughly to player's baseline (y=500)
+	obs.position = Vector2(600, 500)
 	obstacle_container.add_child(obs)

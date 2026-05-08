@@ -1,22 +1,29 @@
 extends GameBase
 
-var player: ColorRect
+const PLAYER_TEXTURE: Texture2D = preload("res://ui/assets/3 Lane/Runner-Pod.svg")
+const OBSTACLE_TEXTURE: Texture2D = preload("res://ui/assets/3 Lane/Laser-Barricade.svg")
+
+var player: Sprite2D
 var hud: CanvasLayer
 var obstacle_container: Node2D
 
 var speed = 300.0
 var spawn_timer = 2.0
 var current_lane = 1 # 0: left, 1: center, 2: right
-var lane_x = [100.0, 250.0, 400.0]
-var target_x = 250.0
+var lane_x = [120.0, 270.0, 420.0]
+var target_x = 270.0
 var last_lunge_side = -1
 var has_started = false
 
 func _ready():
-	game_name = "3-Lane Switcher"
+	game_name = "Lane Switcher"
 	ExerciseRecognizer.set_active_exercise("Lunges")
 	
 	player = $Player
+	player.texture = PLAYER_TEXTURE
+	# center sprites (position refers to center) and reduce scale slightly
+	player.centered = true
+	player.scale = Vector2(0.8, 0.8)
 	hud = $HUD
 	obstacle_container = $Obstacles
 
@@ -48,7 +55,14 @@ func _process(delta):
 			add_score(1)
 			hud.update_score(score)
 		
-		if abs(obs.position.x - player.position.x) < 40 and abs(obs.position.y - player.position.y) < 40:
+		# collision using rectangular overlap suitable for centered sprites
+		var player_w = 56
+		var player_h = 56
+		var obs_w = 56
+		var obs_h = 56
+		var player_rect = Rect2(player.position.x - player_w/2, player.position.y - player_h/2, player_w, player_h)
+		var obs_rect = Rect2(obs.position.x - obs_w/2, obs.position.y - obs_h/2, obs_w, obs_h)
+		if player_rect.intersects(obs_rect):
 			end_game()
 
 func on_rep_completed(rep_count: int) -> void:
@@ -64,9 +78,12 @@ func on_rep_completed(rep_count: int) -> void:
 	target_x = lane_x[current_lane]
 
 func _spawn_obstacle():
-	var obs = ColorRect.new()
-	obs.color = Color("#EF4444")
-	obs.size = Vector2(60, 40)
+	var obs = Sprite2D.new()
+	obs.texture = OBSTACLE_TEXTURE
+	# centered so position aligns with player's x
+	obs.centered = true
+	obs.scale = Vector2(1.0, 1.0)
 	var lane = randi() % 3
-	obs.position = Vector2(lane_x[lane], -100)
+	# spawn above the top of the screen
+	obs.position = Vector2(lane_x[lane], -40)
 	obstacle_container.add_child(obs)
