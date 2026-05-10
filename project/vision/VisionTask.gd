@@ -100,11 +100,13 @@ func _initialize_camera_extension() -> void:
 		return
 	if not CameraServer.monitoring_feeds:
 		return
-	if OS.get_name() in ["Windows", "iOS"]:
+	if OS.get_name() in ["Windows", "iOS", "Android"]:
 		camera_extension = CameraServerExtension.new()
 		camera_extension.permission_result.connect(self._camera_permission_result)
 		if not camera_extension.permission_granted():
 			camera_extension.request_permission()
+			if OS.get_name() == "Android":
+				OS.request_permissions()
 
 func _camera_permission_result(granted: bool) -> void:
 	if granted:

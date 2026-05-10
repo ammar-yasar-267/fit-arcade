@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://uh611djdmu6k"
-path="res://.godot/imported/Dino.svg-caf65a1ba6527f08c0cfe0001bc7b8ae.ctex"
+uid="uid://k300t5e7m2sk"
+path="res://.godot/imported/Dino-Neon-Cactus.svg-bb17c7cc42abf6263ab05690b37473ff.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://ui/assets/Dino/Dino.svg"
-dest_files=["res://.godot/imported/Dino.svg-caf65a1ba6527f08c0cfe0001bc7b8ae.ctex"]
+source_file="res://ui/assets/Flappy Bird/Dino-Neon-Cactus.svg"
+dest_files=["res://.godot/imported/Dino-Neon-Cactus.svg-bb17c7cc42abf6263ab05690b37473ff.ctex"]
 
 [params]
 

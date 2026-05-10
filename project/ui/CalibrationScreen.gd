@@ -27,35 +27,36 @@ func _ready():
 	add_child(landmarker_instance)
 	
 	overlay_rect = ColorRect.new()
-	overlay_rect.color = Color(0.02, 0.02, 0.07, 0.78)
+	overlay_rect.color = Color(0.02, 0.02, 0.07, 0.6) # Slightly more transparent for better depth
 	overlay_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(overlay_rect)
 	
-	var margin = MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 24)
-	margin.add_theme_constant_override("margin_right", 24)
-	margin.add_theme_constant_override("margin_top", 36)
-	margin.add_theme_constant_override("margin_bottom", 24)
-	overlay_rect.add_child(margin)
+	var center_root = CenterContainer.new()
+	center_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay_rect.add_child(center_root)
 	
 	var outer = VBoxContainer.new()
 	outer.alignment = BoxContainer.ALIGNMENT_CENTER
-	outer.add_theme_constant_override("separation", 18)
-	margin.add_child(outer)
+	outer.add_theme_constant_override("separation", 24)
+	center_root.add_child(outer)
 	
 	var hero_card = PanelContainer.new()
-	hero_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hero_card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	hero_card.custom_minimum_size = Vector2(460, 0) # Reduced from 600
 	var hero_style = StyleBoxFlat.new()
 	hero_style.bg_color = CARD_SURFACE
-	hero_style.corner_radius_top_left = 22
-	hero_style.corner_radius_top_right = 22
-	hero_style.corner_radius_bottom_left = 22
-	hero_style.corner_radius_bottom_right = 22
-	hero_style.content_margin_left = 24
-	hero_style.content_margin_right = 24
-	hero_style.content_margin_top = 24
-	hero_style.content_margin_bottom = 22
+	hero_style.border_width_top = 4
+	hero_style.border_color = BRAND_CYAN
+	hero_style.corner_radius_top_left = 28
+	hero_style.corner_radius_top_right = 28
+	hero_style.corner_radius_bottom_left = 28
+	hero_style.corner_radius_bottom_right = 28
+	hero_style.content_margin_left = 32
+	hero_style.content_margin_right = 32
+	hero_style.content_margin_top = 32
+	hero_style.content_margin_bottom = 32
+	hero_style.shadow_color = Color(0, 0, 0, 0.3)
+	hero_style.shadow_size = 20
 	hero_card.add_theme_stylebox_override("panel", hero_style)
 	outer.add_child(hero_card)
 	
@@ -66,14 +67,14 @@ func _ready():
 	
 	title_label = Label.new()
 	title_label.text = "Calibration"
-	title_label.add_theme_font_size_override("font_size", 61)
+	title_label.add_theme_font_size_override("font_size", 48) # Reduced from 61
 	title_label.add_theme_color_override("font_color", BRAND_CYAN)
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hero.add_child(title_label)
 	
 	var subtitle = Label.new()
-	subtitle.text = "Get your body fully in frame before starting the game"
-	subtitle.add_theme_font_size_override("font_size", 27)
+	subtitle.text = "Get your body fully in frame"
+	subtitle.add_theme_font_size_override("font_size", 22) # Reduced from 27
 	subtitle.add_theme_color_override("font_color", TEXT_SECONDARY)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -82,15 +83,20 @@ func _ready():
 	var status_chip = PanelContainer.new()
 	status_chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	var chip_style = StyleBoxFlat.new()
-	chip_style.bg_color = Color("#171532")
-	chip_style.corner_radius_top_left = 999
-	chip_style.corner_radius_top_right = 999
-	chip_style.corner_radius_bottom_left = 999
-	chip_style.corner_radius_bottom_right = 999
-	chip_style.content_margin_left = 12
-	chip_style.content_margin_right = 12
-	chip_style.content_margin_top = 6
-	chip_style.content_margin_bottom = 6
+	chip_style.bg_color = Color("#11102B")
+	chip_style.border_width_left = 2
+	chip_style.border_width_right = 2
+	chip_style.border_width_top = 2
+	chip_style.border_width_bottom = 2
+	chip_style.border_color = Color("#06B6D4", 0.4)
+	chip_style.corner_radius_top_left = 12
+	chip_style.corner_radius_top_right = 12
+	chip_style.corner_radius_bottom_left = 12
+	chip_style.corner_radius_bottom_right = 12
+	chip_style.content_margin_left = 20
+	chip_style.content_margin_right = 20
+	chip_style.content_margin_top = 8
+	chip_style.content_margin_bottom = 8
 	status_chip.add_theme_stylebox_override("panel", chip_style)
 	
 	status_chip_label = Label.new()
@@ -103,7 +109,7 @@ func _ready():
 	
 	detail_label = Label.new()
 	detail_label.text = "Step into the camera view so I can see your full body."
-	detail_label.add_theme_font_size_override("font_size", 32)
+	detail_label.add_theme_font_size_override("font_size", 24) # Reduced from 32
 	detail_label.add_theme_color_override("font_color", TEXT_PRIMARY)
 	detail_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -120,29 +126,32 @@ func _ready():
 	hero.add_child(step_label)
 	
 	ready_button = Button.new()
-	ready_button.text = "Continuing to game..."
-	ready_button.add_theme_font_size_override("font_size", 35)
-	ready_button.add_theme_color_override("font_color", TEXT_PRIMARY)
-	ready_button.custom_minimum_size = Vector2(0, 60)
+	ready_button.text = "CONTINUING TO GAME..."
+	ready_button.add_theme_font_size_override("font_size", 28)
+	ready_button.add_theme_color_override("font_color", BRAND_CYAN) # Cyan text
+	ready_button.custom_minimum_size = Vector2(320, 64)
 	ready_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	var button_style = StyleBoxFlat.new()
-	button_style.bg_color = Color("#151331")
+	button_style.bg_color = Color("#11102B", 0.9) # Dark navy
+	button_style.border_width_left = 3
+	button_style.border_width_right = 3
+	button_style.border_width_top = 3
+	button_style.border_width_bottom = 3
 	button_style.border_color = BRAND_CYAN
-	button_style.border_width_left = 1
-	button_style.border_width_right = 1
-	button_style.border_width_top = 1
-	button_style.border_width_bottom = 1
-	button_style.corner_radius_top_left = 16
-	button_style.corner_radius_top_right = 16
-	button_style.corner_radius_bottom_left = 16
-	button_style.corner_radius_bottom_right = 16
-	button_style.content_margin_left = 20
-	button_style.content_margin_right = 20
-	button_style.content_margin_top = 12
-	button_style.content_margin_bottom = 12
+	button_style.corner_radius_top_left = 18
+	button_style.corner_radius_top_right = 18
+	button_style.corner_radius_bottom_left = 18
+	button_style.corner_radius_bottom_right = 18
+	button_style.content_margin_left = 32
+	button_style.content_margin_right = 32
+	button_style.content_margin_top = 14
+	button_style.content_margin_bottom = 14
+	button_style.shadow_color = Color(0, 0, 0, 0.4)
+	button_style.shadow_size = 10
 	ready_button.add_theme_stylebox_override("normal", button_style)
 	var button_hover = button_style.duplicate()
-	button_hover.bg_color = Color("#1B1840")
+	button_hover.bg_color = Color("#1A1640")
+	button_hover.border_color = Color("#0891B2")
 	ready_button.add_theme_stylebox_override("hover", button_hover)
 	ready_button.hide()
 	ready_button.pressed.connect(_on_ready_pressed)

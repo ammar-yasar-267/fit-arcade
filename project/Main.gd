@@ -19,18 +19,20 @@ func _get_game_accent(game_id: String) -> Color:
 
 func _ready() -> void:
 	_build_ui()
+	if OS.get_name() == "Android":
+		OS.request_permissions()
 
 func _build_ui() -> void:
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 24)
-	margin.add_theme_constant_override("margin_right", 24)
-	margin.add_theme_constant_override("margin_top", 48)
-	margin.add_theme_constant_override("margin_bottom", 24)
+	margin.add_theme_constant_override("margin_left", 32)
+	margin.add_theme_constant_override("margin_right", 32)
+	margin.add_theme_constant_override("margin_top", 60)
+	margin.add_theme_constant_override("margin_bottom", 60) # Increased bottom margin
 	add_child(margin)
 
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 32)
+	vbox.add_theme_constant_override("separation", 48) # Increased separation
 	margin.add_child(vbox)
 
 	# --- Header ---
@@ -50,16 +52,9 @@ func _build_ui() -> void:
 	header.add_child(subtitle)
 	vbox.add_child(header)
 
-	# --- Game Selection ---
-	var games_label = Label.new()
-	games_label.text = "Choose a workout"
-	games_label.add_theme_font_size_override("font_size", 42)
-	games_label.add_theme_color_override("font_color", TEXT_PRIMARY)
-	games_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(games_label)
-
 	var scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED # Disable horizontal scroll bar
 	vbox.add_child(scroll)
 	
 	var games_vbox = VBoxContainer.new()
@@ -103,145 +98,137 @@ func _create_stat_card(parent: Control, title: String, value: String) -> void:
 	parent.add_child(panel)
 
 func _create_game_card(parent: Control, game_name: String, exercise_name: String, game_id: String) -> void:
-	var btn = Button.new()
-	btn.custom_minimum_size = Vector2(0, 132)
+	var card = PanelContainer.new()
+	card.custom_minimum_size = Vector2(0, 150)
 	var style = StyleBoxFlat.new()
 	style.bg_color = CARD_SURFACE
 	style.corner_radius_top_left = 16
 	style.corner_radius_top_right = 16
 	style.corner_radius_bottom_left = 16
 	style.corner_radius_bottom_right = 16
-	style.content_margin_left = 18
-	style.content_margin_right = 18
-	style.content_margin_top = 16
-	style.content_margin_bottom = 16
-	btn.add_theme_stylebox_override("normal", style)
-
-	var hover = style.duplicate()
-	hover.bg_color = CARD_SURFACE.lightened(0.06)
-	btn.add_theme_stylebox_override("hover", hover)
+	card.add_theme_stylebox_override("panel", style)
 
 	var hbox = HBoxContainer.new()
-	hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	hbox.add_theme_constant_override("separation", 14)
+	hbox.add_theme_constant_override("separation", 0) # Manual padding control
+	card.add_child(hbox)
+
+	# Left Icon
+	var icon_margin := MarginContainer.new()
+	icon_margin.add_theme_constant_override("margin_left", 20)
+	icon_margin.add_theme_constant_override("margin_right", 20)
+	hbox.add_child(icon_margin)
 
 	var icon_panel = PanelContainer.new()
-	icon_panel.custom_minimum_size = Vector2(88, 88)
-	var icon_panel_style = StyleBoxFlat.new()
-	icon_panel_style.bg_color = Color("#121028")
-	icon_panel_style.border_width_left = 0
-	icon_panel_style.border_width_right = 0
-	icon_panel_style.border_width_top = 0
-	icon_panel_style.border_width_bottom = 0
-	icon_panel_style.corner_radius_top_left = 18
-	icon_panel_style.corner_radius_top_right = 18
-	icon_panel_style.corner_radius_bottom_left = 18
-	icon_panel_style.corner_radius_bottom_right = 18
-	icon_panel_style.content_margin_left = 10
-	icon_panel_style.content_margin_right = 10
-	icon_panel_style.content_margin_top = 10
-	icon_panel_style.content_margin_bottom = 10
-	icon_panel.add_theme_stylebox_override("panel", icon_panel_style)
+	icon_panel.custom_minimum_size = Vector2(90, 90)
+	icon_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var icon_style = StyleBoxFlat.new()
+	icon_style.bg_color = Color("#121028")
+	icon_style.corner_radius_top_left = 18
+	icon_style.corner_radius_top_right = 18
+	icon_style.corner_radius_bottom_left = 18
+	icon_style.corner_radius_bottom_right = 18
+	icon_panel.add_theme_stylebox_override("panel", icon_style)
+	icon_margin.add_child(icon_panel)
 
 	var icon_box = CenterContainer.new()
-	icon_box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	icon_panel.add_child(icon_box)
 
 	var icon = TextureRect.new()
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.custom_minimum_size = Vector2(64, 64)
-	icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	match game_id:
 		"dino": icon.texture = ICON_DINO
 		"flappy": icon.texture = ICON_FLAPPY
 		"switcher": icon.texture = ICON_LANE
 		_: icon.texture = ICON_DINO
-
 	icon_box.add_child(icon)
 
 	var vbox = VBoxContainer.new()
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_theme_constant_override("separation", 6)
+	# Add right margin to prevent collision with play button
+	var vbox_margin := MarginContainer.new()
+	vbox_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox_margin.add_theme_constant_override("margin_right", 15)
+	vbox_margin.add_child(vbox)
+	hbox.add_child(vbox_margin)
 
 	var name_label = Label.new()
 	name_label.text = game_name
 	name_label.add_theme_font_size_override("font_size", 35)
 	name_label.add_theme_color_override("font_color", TEXT_PRIMARY)
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	vbox.add_child(name_label)
 
 	var pill = PanelContainer.new()
-	pill.custom_minimum_size = Vector2(0, 0)
 	pill.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	var pill_style = StyleBoxFlat.new()
 	pill_style.bg_color = Color("#201C48")
-	pill_style.border_width_left = 0
-	pill_style.border_width_right = 0
-	pill_style.border_width_top = 0
-	pill_style.border_width_bottom = 0
 	pill_style.corner_radius_top_left = 999
 	pill_style.corner_radius_top_right = 999
 	pill_style.corner_radius_bottom_left = 999
 	pill_style.corner_radius_bottom_right = 999
-	pill_style.content_margin_left = 10
-	pill_style.content_margin_right = 10
-	pill_style.content_margin_top = 5
-	pill_style.content_margin_bottom = 5
+	pill_style.content_margin_left = 12
+	pill_style.content_margin_right = 12
+	pill_style.content_margin_top = 4
+	pill_style.content_margin_bottom = 4
 	pill.add_theme_stylebox_override("panel", pill_style)
+	vbox.add_child(pill)
 
 	var pill_label = Label.new()
 	pill_label.text = exercise_name
 	pill_label.add_theme_font_size_override("font_size", 21)
 	pill_label.add_theme_color_override("font_color", _get_game_accent(game_id))
-	pill_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	pill_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	pill.add_child(pill_label)
-	vbox.add_child(pill)
 
-	var spacer = Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
+	# Right Play Strip
 	var play_strip := Button.new()
-	play_strip.custom_minimum_size = Vector2(86, 0)
+	play_strip.custom_minimum_size = Vector2(100, 0)
 	play_strip.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	play_strip.focus_mode = Control.FOCUS_NONE
+	play_strip.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	var play_style := StyleBoxFlat.new()
-	play_style.bg_color = _get_game_accent(game_id).darkened(0.28)
-	play_style.corner_radius_top_left = 18
-	play_style.corner_radius_top_right = 18
-	play_style.corner_radius_bottom_left = 18
-	play_style.corner_radius_bottom_right = 18
-	play_style.content_margin_left = 10
-	play_style.content_margin_right = 10
-	play_style.content_margin_top = 10
-	play_style.content_margin_bottom = 10
+	var base_play_color = _get_game_accent(game_id).darkened(0.25)
+	play_style.bg_color = base_play_color
+	play_style.corner_radius_top_right = 16
+	play_style.corner_radius_bottom_right = 16
 	play_strip.add_theme_stylebox_override("normal", play_style)
-	var play_hover := play_style.duplicate()
-	play_hover.bg_color = _get_game_accent(game_id).darkened(0.18)
-	play_strip.add_theme_stylebox_override("hover", play_hover)
-	var play_box := CenterContainer.new()
-	play_box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	play_strip.add_child(play_box)
+	
 	var play_icon := Label.new()
 	play_icon.text = "▶"
-	play_icon.add_theme_font_size_override("font_size", 54)
-	play_icon.add_theme_color_override("font_color", Color(1, 1, 1, 0.36))
-	play_box.add_child(play_icon)
+	play_icon.add_theme_font_size_override("font_size", 44) # Slightly smaller to fit better
+	play_icon.add_theme_color_override("font_color", Color(1, 1, 1, 0.4))
+	play_icon.set_anchors_preset(Control.PRESET_CENTER)
+	play_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	play_icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# Use a CenterContainer inside the button to guarantee alignment
+	var play_center := CenterContainer.new()
+	play_center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	play_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	play_strip.add_child(play_center)
+	play_center.add_child(play_icon)
+	
 	play_strip.pressed.connect(_on_game_selected.bind(game_id))
-	play_strip.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-
-	hbox.add_child(icon_panel)
-	hbox.add_child(vbox)
-	hbox.add_child(spacer)
 	hbox.add_child(play_strip)
 
-	btn.add_child(hbox)
-	btn.pressed.connect(_on_game_selected.bind(game_id))
-	parent.add_child(btn)
+	# Full card click overlay with hover effects
+	var full_click := Button.new()
+	full_click.set_anchors_preset(Control.PRESET_FULL_RECT)
+	full_click.flat = true
+	full_click.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	full_click.pressed.connect(_on_game_selected.bind(game_id))
+	card.add_child(full_click)
+	
+	# Restore Hover Effects
+	full_click.mouse_entered.connect(func():
+		style.bg_color = CARD_SURFACE.lightened(0.08)
+		play_style.bg_color = base_play_color.lightened(0.15)
+	)
+	full_click.mouse_exited.connect(func():
+		style.bg_color = CARD_SURFACE
+		play_style.bg_color = base_play_color
+	)
+
+	parent.add_child(card)
 
 func _on_game_selected(game_id: String) -> void:
 	GameManager.selected_game_name = game_id

@@ -1,7 +1,7 @@
 extends GameBase
 
-const PLAYER_TEXTURE: Texture2D = preload("res://ui/assets/dino/Dino.svg")
-const OBSTACLE_TEXTURE: Texture2D = preload("res://ui/assets/dino/Dino-Neon-Cactus.svg")
+const PLAYER_TEXTURE: Texture2D = preload("res://ui/assets/Flappy Bird/Dino.svg")
+const OBSTACLE_TEXTURE: Texture2D = preload("res://ui/assets/Flappy Bird/Dino-Neon-Cactus.svg")
 
 var player: Sprite2D
 var hud: CanvasLayer
@@ -22,11 +22,17 @@ func _ready():
 	player = $Player
 	player.texture = PLAYER_TEXTURE
 	player.centered = false
-	# Increase player size to match app visuals
 	player.scale = Vector2(0.9, 0.9)
+	player.z_index = 10 # Enforce foreground
+	
 	hud = $HUD
 	ground = $Ground
 	obstacle_container = $Obstacles
+	
+	# Extra safety: ensure Background is behind
+	var bg = get_node_or_null("Background")
+	if bg: bg.z_index = -10
+	if ground: ground.z_index = -5
 
 func start_game():
 	super.start_game()
@@ -39,9 +45,7 @@ func start_game():
 
 func _process(delta):
 	if not is_running: return
-	
-	if not has_started:
-		return
+	if not has_started: return
 	
 	velocity_y += gravity * delta
 	player.position.y += velocity_y * delta
@@ -61,15 +65,16 @@ func _process(delta):
 		if obs.position.x < -100:
 			obs.queue_free()
 			add_score(1)
-			hud.update_score(score)
+			if hud and hud.has_method("update_score"):
+				hud.update_score(score)
 		
-		# Collision (adjusted for larger sprite dimensions)
+		# Collision
 		var player_rect = Rect2(player.position.x, player.position.y, 60, 60)
 		var obs_rect = Rect2(obs.position.x, obs.position.y, 60, 80)
 		if player_rect.intersects(obs_rect):
 			end_game()
 
-func on_rep_completed(rep_count: int) -> void:
+func on_rep_completed(_rep_count: int) -> void:
 	if not has_started:
 		has_started = true
 	if player.position.y >= 490:
@@ -79,8 +84,7 @@ func _spawn_obstacle():
 	var obs = Sprite2D.new()
 	obs.texture = OBSTACLE_TEXTURE
 	obs.centered = false
-	# Make obstacle larger and place it on the ground level
+	obs.z_index = 10
 	obs.scale = Vector2(0.9, 0.9)
-	# Position aligned roughly to player's baseline (y=500)
 	obs.position = Vector2(600, 500)
 	obstacle_container.add_child(obs)

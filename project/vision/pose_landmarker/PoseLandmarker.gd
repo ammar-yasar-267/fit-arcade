@@ -9,6 +9,7 @@ var task: MediaPipePoseLandmarker
 var task_file := "pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
 var renderer: MediaPipePoseRenderer
 var game_instance: GameBase = null
+var game_canvas: CanvasLayer = null
 var pose_preview: TextureRect = null
 var pose_canvas: CanvasLayer = null
 var state_label: Label = null
@@ -18,9 +19,14 @@ var overlay_root: Control = null
 # Using a timestamp instead of a boolean prevents permanent lockup when
 # MediaPipe does not call back (e.g. no person in frame).
 var last_inference_ms: int = -1
-# Using a timestamp instead of a boolean prevents permanent lockup when
-# MediaPipe does not call back (e.g. no person in frame).
-# Timeout value is read dynamically from Settings.
+
+# HUD elements for gameplay
+var score_label: Label = null
+var timer_label: Label = null
+var rep_label: Label = null
+var prompt_label: Label = null
+var elapsed_time: float = 0.0
+var is_timing: bool = false
 
 func _result_callback(result: MediaPipePoseLandmarkerResult, image: MediaPipeImage, _timestamp_ms: int) -> void:
 	last_inference_ms = -1
@@ -43,23 +49,33 @@ func _ready() -> void:
 ## On Windows, CameraServerExtension must exist BEFORE feeds can be discovered.
 func _auto_open_camera() -> void:
 	_reset()
+	print("DEBUG: _auto_open_camera() called, OS: ", OS.get_name())
 	# Step 1: Enable monitoring
 	if not CameraServer.monitoring_feeds:
 		CameraServer.monitoring_feeds = true
-	# Step 2: On Windows, force-create the CameraServerExtension immediately
-	if OS.get_name() in ["Windows", "iOS"] and camera_extension == null:
+	# Step 2: On Windows/iOS/Android, force-create the CameraServerExtension immediately
+	if OS.get_name() in ["Windows", "iOS", "Android"] and camera_extension == null:
+		print("DEBUG: Creating CameraServerExtension for ", OS.get_name())
 		camera_extension = CameraServerExtension.new()
 		camera_extension.permission_result.connect(self._on_auto_permission_result)
-		if not camera_extension.permission_granted():
+		var perm_granted = camera_extension.permission_granted()
+		print("DEBUG: permission_granted() returned: ", perm_granted)
+		if not perm_granted:
+			print("DEBUG: Requesting camera permission...")
 			camera_extension.request_permission()
+			if OS.get_name() == "Android":
+				OS.request_permissions()
 			return # Wait for permission callback
 	# Step 3: Try to select a camera
+	print("DEBUG: Proceeding to _select_camera()")
 	_select_camera()
 
 func _on_auto_permission_result(granted: bool) -> void:
+	print("DEBUG: _on_auto_permission_result called with granted=", granted)
 	if granted:
 		_select_camera()
 	else:
+		print("DEBUG: Permission denied, showing dialog")
 		permission_dialog.popup_centered()
 
 func _init_task():
@@ -143,7 +159,48 @@ func _start_exercise_and_game() -> void:
 			if game_scene:
 				game_instance = game_scene.instantiate() as GameBase
 				if game_instance:
-					add_child(game_instance)
+					# Create a dedicated CanvasLayer for the game (Layer 1, below HUD)
+					game_canvas = CanvasLayer.new()
+					game_canvas.layer = 1
+					add_child(game_canvas)
+					# Calculate logical dimensions to fill height
+					var window_size = get_viewport().get_visible_rect().size
+					if window_size.y == 0: window_size = Vector2(540, 960)
+					
+					var aspect = float(window_size.x) / float(window_size.y)
+					var logical_height = 960.0
+					var logical_width = logical_height * aspect
+					
+					# Create the Viewport
+					var viewport = SubViewport.new()
+					viewport.size = Vector2i(int(logical_width), int(logical_height))
+					viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+					viewport.handle_input_locally = true
+					viewport.transparent_bg = false
+					
+					# Create the display texture FIRST
+					var game_display = TextureRect.new()
+					game_display.set_anchors_preset(Control.PRESET_FULL_RECT)
+					game_display.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+					game_display.stretch_mode = TextureRect.STRETCH_SCALE
+					game_canvas.add_child(game_display)
+					
+					# Add viewport to tree
+					add_child(viewport)
+					viewport.add_child(game_instance)
+					
+					# Link texture (must happen AFTER adding viewport to tree)
+					game_display.texture = viewport.get_texture()
+					
+					# Center the game content
+					if game_instance is Node2D:
+						game_instance.position.x = (logical_width - 540.0) / 2.0
+					
+					# Hide the game's internal HUD (if it's not needed)
+					var game_hud = game_instance.get_node_or_null("HUD")
+					if game_hud and game_name != "dino": # Keep dino HUD if it's causing issues
+						game_hud.visible = false
+					
 					GameManager.set_active_game(game_instance)
 					game_instance.start_game()
 					game_instance.game_over.connect(_on_game_over)
@@ -162,7 +219,7 @@ func _start_exercise_and_game() -> void:
 
 func _create_pose_preview() -> void:
 	pose_canvas = CanvasLayer.new()
-	pose_canvas.layer = 10 # On top of everything
+	pose_canvas.layer = 10 # On top of game
 	
 	overlay_root = Control.new()
 	overlay_root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -174,81 +231,199 @@ func _create_pose_preview() -> void:
 	top_bar.anchor_top = 0.0
 	top_bar.anchor_right = 1.0
 	top_bar.anchor_bottom = 0.0
-	top_bar.offset_left = 12
-	top_bar.offset_top = 12
-	top_bar.offset_right = -12
+	top_bar.offset_left = 10
+	top_bar.offset_top = 10
+	top_bar.offset_right = -10
 	top_bar.add_theme_constant_override("separation", 10)
 	overlay_root.add_child(top_bar)
 
-	back_button = _make_chip_button("Back")
+	back_button = Button.new()
+	back_button.text = "← BACK"
+	back_button.add_theme_font_size_override("font_size", 32)
+	back_button.custom_minimum_size = Vector2(160, 56)
+	back_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var back_style := StyleBoxFlat.new()
+	back_style.bg_color = Color("#1A1640", 0.8)
+	back_style.border_width_left = 2
+	back_style.border_width_right = 2
+	back_style.border_width_top = 2
+	back_style.border_width_bottom = 2
+	back_style.border_color = Color("#06B6D4", 0.5)
+	back_style.corner_radius_top_left = 16
+	back_style.corner_radius_top_right = 16
+	back_style.corner_radius_bottom_left = 16
+	back_style.corner_radius_bottom_right = 16
+	back_style.content_margin_top = 8
+	back_style.content_margin_bottom = 8
+	back_style.content_margin_left = 20
+	back_style.content_margin_right = 20
+	back_button.add_theme_stylebox_override("normal", back_style)
+	
+	var back_hover := back_style.duplicate()
+	back_hover.bg_color = Color("#2A2660", 0.9)
+	back_hover.border_color = Color("#06B6D4", 1.0)
+	back_button.add_theme_stylebox_override("hover", back_hover)
+	
 	back_button.pressed.connect(_back)
 	top_bar.add_child(back_button)
 
-	# Camera preview with pose skeleton — bottom dock
-	var preview_container := PanelContainer.new()
-	preview_container.anchors_preset = Control.PRESET_BOTTOM_WIDE
-	preview_container.anchor_left = 0.10
-	preview_container.anchor_top = 0.78
-	preview_container.anchor_right = 0.90
-	preview_container.anchor_bottom = 1.0
-	preview_container.offset_left = 0.0
-	preview_container.offset_top = -6.0
-	preview_container.offset_right = 0.0
-	preview_container.offset_bottom = -6.0
-	preview_container.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	# Spacer to push timer to the right
+	var mid_spacer := Control.new()
+	mid_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_bar.add_child(mid_spacer)
+	
+	var timer_panel := PanelContainer.new()
+	timer_panel.custom_minimum_size = Vector2(160, 56) # Same as back button
+	var tstyle := StyleBoxFlat.new()
+	tstyle.bg_color = Color("#1A1640", 0.7) # Match back button theme
+	tstyle.border_width_left = 2
+	tstyle.border_width_right = 2
+	tstyle.border_width_top = 2
+	tstyle.border_width_bottom = 2
+	tstyle.border_color = Color("#06B6D4", 0.6) # Cyan border for "active" timer
+	tstyle.corner_radius_top_left = 16
+	tstyle.corner_radius_top_right = 16
+	tstyle.corner_radius_bottom_left = 16
+	tstyle.corner_radius_bottom_right = 16
+	tstyle.content_margin_top = 8
+	tstyle.content_margin_bottom = 8
+	tstyle.content_margin_left = 20
+	tstyle.content_margin_right = 20
+	timer_panel.add_theme_stylebox_override("panel", tstyle)
+	top_bar.add_child(timer_panel)
+	
+	timer_label = Label.new()
+	timer_label.text = "00:00"
+	timer_label.add_theme_font_size_override("font_size", 32) # Same as back button
+	timer_label.add_theme_color_override("font_color", Color("#FFFFFF"))
+	timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	timer_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	timer_panel.add_child(timer_label)
+	
 
-	# Dark semi-transparent background
+	# Bottom dock: Wide bar with space on sides
+	var preview_container := PanelContainer.new()
+	preview_container.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	preview_container.anchor_left = 0.1
+	preview_container.anchor_right = 0.9
+	preview_container.anchor_top = 0.82
+	preview_container.anchor_bottom = 0.98
+	preview_container.offset_left = 0
+	preview_container.offset_right = 0
+	preview_container.offset_top = 0
+	preview_container.offset_bottom = 0
+	preview_container.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	preview_container.grow_vertical = Control.GROW_DIRECTION_BEGIN
+
+	# Deep navy theme
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.0, 0.0, 0.0, 0.58)
-	style.corner_radius_top_left = 18
-	style.corner_radius_top_right = 18
-	style.corner_radius_bottom_left = 18
-	style.corner_radius_bottom_right = 18
-	style.content_margin_left = 8
-	style.content_margin_right = 8
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
+	style.bg_color = Color("#0A0A1A", 0.85) # Slight transparency
+	style.border_color = Color("#06B6D4")
+	style.border_width_top = 2
+	style.corner_radius_top_left = 20
+	style.corner_radius_top_right = 20
+	style.content_margin_left = 15
+	style.content_margin_right = 15
+	style.content_margin_top = 10
+	style.content_margin_bottom = 10
 	preview_container.add_theme_stylebox_override("panel", style)
 
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
+	var main_hbox := HBoxContainer.new()
+	main_hbox.add_theme_constant_override("separation", 20)
+	main_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	preview_container.add_child(main_hbox)
 
-	# Preview title and state chip
-	var label := Label.new()
-	label.text = "Pose Preview"
-	label.add_theme_font_size_override("font_size", 22)
-	label.add_theme_color_override("font_color", Color(0.63,0.61,0.75))
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(label)
+	# --- Left Side: Score ---
+	var score_box := VBoxContainer.new()
+	score_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	
+	score_label = Label.new()
+	score_label.text = "0"
+	score_label.add_theme_font_size_override("font_size", 64)
+	score_label.add_theme_color_override("font_color", Color("#06B6D4"))
+	score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	score_box.add_child(score_label)
+	
+	var score_title := Label.new()
+	score_title.text = "SCORE"
+	score_title.add_theme_font_size_override("font_size", 28)
+	score_title.add_theme_color_override("font_color", Color("#A09CC0"))
+	score_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	score_box.add_child(score_title)
+	main_hbox.add_child(score_box)
+
+	# --- Center: Camera Preview ---
+	var camera_box := VBoxContainer.new()
+	camera_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	camera_box.add_theme_constant_override("separation", 10)
 
 	# Pose image (camera + skeleton)
 	pose_preview = TextureRect.new()
 	pose_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pose_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	pose_preview.custom_minimum_size = Vector2(460, 180)
+	pose_preview.custom_minimum_size = Vector2(240, 135)
 	pose_preview.texture = ImageTexture.new()
-	vbox.add_child(pose_preview)
+	
+	# Add a subtle border around the camera feed
+	var cam_border := PanelContainer.new()
+	var bstyle := StyleBoxFlat.new()
+	bstyle.bg_color = Color(0, 0, 0, 0.4)
+	bstyle.border_width_left = 2
+	bstyle.border_width_right = 2
+	bstyle.border_width_top = 2
+	bstyle.border_width_bottom = 2
+	bstyle.border_color = Color(0.2, 0.2, 0.4)
+	bstyle.corner_radius_top_left = 4
+	bstyle.corner_radius_top_right = 4
+	bstyle.corner_radius_bottom_left = 4
+	bstyle.corner_radius_bottom_right = 4
+	cam_border.add_theme_stylebox_override("panel", bstyle)
+	cam_border.add_child(pose_preview)
+	camera_box.add_child(cam_border)
+	
+	main_hbox.add_child(camera_box)
 
-	# Compact state label
-	state_label = Label.new()
-	state_label.text = "Reps: 0"
-	state_label.add_theme_font_size_override("font_size", 22)
-	state_label.add_theme_color_override("font_color", Color(0.63,0.61,0.75))
-	state_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var state_chip := _make_chip_panel()
-	state_chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	state_chip.add_child(state_label)
-	vbox.add_child(state_chip)
+	# --- Right Side: Reps ---
+	var rep_box := VBoxContainer.new()
+	rep_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	
+	rep_label = Label.new()
+	rep_label.text = "0"
+	rep_label.add_theme_font_size_override("font_size", 64)
+	rep_label.add_theme_color_override("font_color", Color("#FFFFFF"))
+	rep_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rep_box.add_child(rep_label)
 
-	preview_container.add_child(vbox)
+	var rep_title := Label.new()
+	rep_title.text = "REPS"
+	rep_title.add_theme_font_size_override("font_size", 28)
+	rep_title.add_theme_color_override("font_color", Color("#A09CC0"))
+	rep_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rep_box.add_child(rep_title)
+	main_hbox.add_child(rep_box)
+	
+	# --- Center Screen: Start Prompt ---
+	prompt_label = Label.new()
+	prompt_label.text = "DO A REP TO START"
+	prompt_label.add_theme_font_size_override("font_size", 48)
+	prompt_label.add_theme_color_override("font_color", Color("#FFFFFF", 0.7))
+	prompt_label.set_anchors_preset(Control.PRESET_CENTER)
+	prompt_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	prompt_label.grow_vertical = Control.GROW_DIRECTION_BOTH
+	pose_canvas.add_child(prompt_label)
+
 	pose_canvas.add_child(preview_container)
 	add_child(pose_canvas)
 
 	# Connect exercise signals for debug display
 	ExerciseRecognizer.rep_completed.connect(_on_preview_rep)
-	ExerciseRecognizer.form_feedback.connect(_on_preview_form)
-	if game_instance and not game_instance.score_changed.is_connected(_on_game_score_changed):
-		game_instance.score_changed.connect(_on_game_score_changed)
+	if game_instance:
+		if not game_instance.score_changed.is_connected(_on_game_score_changed):
+			game_instance.score_changed.connect(_on_game_score_changed)
+		if not game_instance.game_over.is_connected(_on_game_over_reset):
+			game_instance.game_over.connect(_on_game_over_reset)
+		is_timing = false # Wait for first rep to start timing
+		elapsed_time = 0.0
 
 func _make_chip_panel() -> PanelContainer:
 	var chip := PanelContainer.new()
@@ -287,20 +462,27 @@ func _make_chip_button(text: String) -> Button:
 	return btn
 
 
-
 func _on_preview_rep() -> void:
-	if state_label:
-		state_label.text = "Reps: %d" % SessionManager.current_reps
+	if rep_label:
+		rep_label.text = str(SessionManager.current_reps)
+	if prompt_label:
+		prompt_label.visible = false
+	# If game hasn't started yet, first rep starts it
+	if game_instance and game_instance.is_running and not is_timing:
+		is_timing = true
+		elapsed_time = 0.0
 
 func _on_game_score_changed(score_value: int) -> void:
-	pass
+	if score_label:
+		score_label.text = str(score_value)
+
+func _on_game_over_reset(_score: int) -> void:
+	is_timing = false
+	# We don't reset elapsed_time here so it stays visible on the HUD during Game Over
+	if prompt_label:
+		prompt_label.visible = true
 
 func _on_preview_form(message: String, is_good: bool) -> void:
-	if state_label:
-		# Short inline state message
-		state_label.text = "Reps: %d — %s" % [SessionManager.current_reps, message]
-
-func _on_preview_state(new_state: int) -> void:
 	pass
 
 func _get_state_name(state: int) -> String:
@@ -325,7 +507,7 @@ func _on_game_over(score: int) -> void:
 
 	var panel = PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	panel.custom_minimum_size = Vector2(460, 0)
+	panel.custom_minimum_size = Vector2(520, 0) # Slightly wider
 	var pstyle = StyleBoxFlat.new()
 	pstyle.bg_color = Color("#1A1640")
 	pstyle.corner_radius_top_left = 22
@@ -340,7 +522,7 @@ func _on_game_over(score: int) -> void:
 
 	var inner = VBoxContainer.new()
 	inner.alignment = BoxContainer.ALIGNMENT_CENTER
-	inner.add_theme_constant_override("separation", 10)
+	inner.add_theme_constant_override("separation", 24) # More space
 	panel.add_child(inner)
 
 	var title = Label.new()
@@ -352,7 +534,7 @@ func _on_game_over(score: int) -> void:
 
 	var chips_row := HBoxContainer.new()
 	chips_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	chips_row.add_theme_constant_override("separation", 8)
+	chips_row.add_theme_constant_override("separation", 20) # More space between chips
 
 	var score_chip := _make_result_chip("Score", str(score))
 	var reps_chip := _make_result_chip("Reps", str(SessionManager.current_reps))
@@ -427,34 +609,52 @@ func _on_game_over(score: int) -> void:
 
 func _make_result_chip(label_text: String, value_text: String) -> PanelContainer:
 	var chip := PanelContainer.new()
+	chip.custom_minimum_size = Vector2(180, 120)
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.10, 0.11, 0.16, 0.95)
-	style.corner_radius_top_left = 999
-	style.corner_radius_top_right = 999
-	style.corner_radius_bottom_left = 999
-	style.corner_radius_bottom_right = 999
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 7
-	style.content_margin_bottom = 7
+	style.bg_color = Color("#11102B")
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.border_color = Color("#06B6D4", 0.4)
+	style.corner_radius_top_left = 20
+	style.corner_radius_top_right = 20
+	style.corner_radius_bottom_left = 20
+	style.corner_radius_bottom_right = 20
+	style.content_margin_left = 20
+	style.content_margin_right = 20
+	style.content_margin_top = 15
+	style.content_margin_bottom = 15
 	chip.add_theme_stylebox_override("panel", style)
 
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	chip.add_child(row)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	chip.add_child(vbox)
 
 	var label := Label.new()
-	label.text = label_text
-	label.add_theme_font_size_override("font_size", 19)
-	label.add_theme_color_override("font_color", Color(0.63,0.61,0.75))
-	row.add_child(label)
+	label.text = label_text.to_upper()
+	label.add_theme_font_size_override("font_size", 22)
+	label.add_theme_color_override("font_color", Color("#A09CC0"))
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(label)
 
 	var value := Label.new()
 	value.text = value_text
-	value.add_theme_font_size_override("font_size", 24)
-	value.add_theme_color_override("font_color", Color(1,1,1))
-	row.add_child(value)
+	value.add_theme_font_size_override("font_size", 54) # Much larger
+	value.add_theme_color_override("font_color", Color("#FFFFFF"))
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(value)
 	return chip
+
+func _process(delta: float) -> void:
+	if is_timing:
+		elapsed_time += delta
+		if timer_label:
+			var mins = int(elapsed_time) / 60
+			var secs = int(elapsed_time) % 60
+			timer_label.text = "%02d:%02d" % [mins, secs]
+	super (delta)
 
 func _camera_frame(image: MediaPipeImage) -> void:
 	# Update pose preview with every captured frame for smooth display,
@@ -468,7 +668,7 @@ func _camera_frame(image: MediaPipeImage) -> void:
 				tex.call_deferred("update", raw)
 			else:
 				tex.call_deferred("set_image", raw)
-	super(image)
+	super (image)
 
 func _process_camera(image: MediaPipeImage, timestamp_ms: int) -> void:
 	if task:

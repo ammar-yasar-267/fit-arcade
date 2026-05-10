@@ -51,11 +51,11 @@ func analyze_calibration_pose(pose_landmarks) -> Dictionary:
 			{"idx": 28, "name": "your right ankle", "hint": "Step back so your right foot is visible"},
 		]
 	elif game == "switcher":
-		# Switcher (lunges) prefers lower body + hips
+		# Switcher (lunges) now only needs knees instead of ankles
 		key_points = [
 			{"idx": 0, "name": "your head", "hint": "Keep your head visible"},
-			{"idx": 27, "name": "your left ankle", "hint": "Step back so your left foot is visible"},
-			{"idx": 28, "name": "your right ankle", "hint": "Step back so your right foot is visible"},
+			{"idx": 25, "name": "your left knee", "hint": "Step back so your knees are visible"},
+			{"idx": 26, "name": "your right knee", "hint": "Step back so your knees are visible"},
 		]
 
 	for point in key_points:

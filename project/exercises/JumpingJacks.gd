@@ -15,17 +15,24 @@ func process_frame(landmarks: MediaPipeNormalizedLandmarks, current_state: Exerc
 	var l_ankle = get_landmark_pos(landmarks, 27)
 	var r_ankle = get_landmark_pos(landmarks, 28)
 	
-	if l_ankle == Vector3.ZERO or r_ankle == Vector3.ZERO:
+	var l_knee = get_landmark_pos(landmarks, 25)
+	var r_knee = get_landmark_pos(landmarks, 26)
+
+	if (l_ankle == Vector3.ZERO or r_ankle == Vector3.ZERO) and (l_knee == Vector3.ZERO or r_knee == Vector3.ZERO):
 		return current_state
+		
+	# Fallback to knees if ankles are missing
+	var left_low = l_ankle if l_ankle != Vector3.ZERO else l_knee
+	var right_low = r_ankle if r_ankle != Vector3.ZERO else r_knee
 		
 	# Arm angle (using max of both arms to be generous)
 	var l_arm_angle = calculate_angle(l_hip, l_shoulder, l_wrist)
 	var r_arm_angle = calculate_angle(r_hip, r_shoulder, r_wrist)
 	var arm_angle = max(l_arm_angle, r_arm_angle)
 	
-	# Leg angle (angle between left ankle, hip center, right ankle)
+	# Leg angle (angle between left leg-low, hip center, right leg-low)
 	var hip_center = Vector3((l_hip.x + r_hip.x) / 2.0, (l_hip.y + r_hip.y) / 2.0, 0)
-	var leg_angle = calculate_angle(l_ankle, hip_center, r_ankle)
+	var leg_angle = calculate_angle(left_low, hip_center, right_low)
 	
 	# Start: arms down at sides (angle < 60 degrees)
 	var is_start = arm_angle < 60.0

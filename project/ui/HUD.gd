@@ -64,6 +64,7 @@ func _ready():
 	style.content_margin_bottom = 10
 	panel.add_theme_stylebox_override("panel", style)
 	add_child(panel)
+	panel.visible = false # HUD moved to bottom dock
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 6)
