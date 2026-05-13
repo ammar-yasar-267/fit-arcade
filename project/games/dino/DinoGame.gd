@@ -8,12 +8,12 @@ var hud: CanvasLayer
 var ground: ColorRect
 var obstacle_container: Node2D
 
-var speed = 180.0
-var jump_velocity = -850.0
-var gravity = 1300.0
+var speed = 180.0        # pixels/sec horizontal obstacle movement
+var jump_velocity = -850.0  # negative = upward in Godot's Y-down coordinate system
+var gravity = 1300.0    # pixels/sec² — lower than default keeps the dino airborne longer
 var spawn_timer = 2.0
 var velocity_y = 0.0
-var has_started = false
+var has_started = false  # first rep starts the game; obstacles don't move until then
 
 var ground_marks: Array = []
 var ground_mark_timer: float = 0.0
@@ -82,6 +82,7 @@ func _process(delta):
 	velocity_y += gravity * delta
 	player.position.y += velocity_y * delta
 
+	# Clamp to ground; only kill velocity when falling (positive Y = downward)
 	if player.position.y >= 500:
 		player.position.y = 500
 		if velocity_y > 0:
@@ -121,6 +122,7 @@ func _process(delta):
 func on_rep_completed(_rep_count: int) -> void:
 	if not has_started:
 		has_started = true
+	# Only allow jumping when on or near the ground — prevents double-jumps
 	if player.position.y >= 490:
 		velocity_y = jump_velocity
 

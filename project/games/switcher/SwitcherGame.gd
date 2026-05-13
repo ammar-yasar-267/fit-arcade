@@ -7,13 +7,13 @@ var player: Sprite2D
 var hud: CanvasLayer
 var obstacle_container: Node2D
 
-var speed = 210.0
+var speed = 210.0        # pixels/sec obstacle drop speed
 var spawn_timer = 2.2
-var current_lane = 1
-var lane_x = [120.0, 270.0, 420.0]
-var target_x = 270.0
+var current_lane = 1     # 0 = left, 1 = centre, 2 = right
+var lane_x = [120.0, 270.0, 420.0]  # screen X position for each lane
+var target_x = 270.0     # player smoothly lerps toward this X each frame
 var last_lunge_side = -1
-var has_started = false
+var has_started = false  # first rep starts the game
 
 var speed_lines: Array = []
 var speed_line_timer: float = 0.0
@@ -57,6 +57,7 @@ func _process(delta):
 
 	if not has_started: return
 
+	# Smooth slide between lanes rather than instant teleport
 	player.position.x = lerp(player.position.x, target_x, 10.0 * delta)
 
 	spawn_timer -= delta
@@ -84,6 +85,7 @@ func on_rep_completed(_rep_count: int) -> void:
 	if not has_started:
 		has_started = true
 	var exercise = ExerciseRecognizer.current_exercise
+	# lunge_side: 0 = left lunge → move left, 1 = right lunge → move right
 	var side = exercise.lunge_side if exercise and exercise.get("lunge_side") != null else -1
 	if side == 0 and current_lane > 0:
 		current_lane -= 1
