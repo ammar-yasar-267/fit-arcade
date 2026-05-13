@@ -85,9 +85,33 @@ func analyze_calibration_pose(pose_landmarks) -> Dictionary:
 			result.missing.append(point.name)
 
 	if missing_parts.is_empty():
-		result.ready = true
-		result.message = "Good framing"
-		result.detail = "Hold steady and keep your full body in frame for a moment."
+		# Check if person is too close (bounding box too large)
+		var min_y = 1.0
+		var max_y = 0.0
+		var min_x = 1.0
+		var max_x = 0.0
+		
+		for pt in landmarks:
+			if pt.y < min_y:
+				min_y = pt.y
+			if pt.y > max_y:
+				max_y = pt.y
+			if pt.x < min_x:
+				min_x = pt.x
+			if pt.x > max_x:
+				max_x = pt.x
+		
+		var body_height = max_y - min_y
+		var body_width = max_x - min_x
+		
+		# If body takes up more than 85% of screen height, person is too close
+		if body_height > 0.85:
+			result.message = "Too close to camera"
+			result.detail = "Step back a bit so your full body fits comfortably in frame."
+		else:
+			result.ready = true
+			result.message = "Good framing"
+			result.detail = "Hold steady and keep your full body in frame for a moment."
 	else:
 		result.message = "Adjust your framing"
 		result.detail = _build_missing_detail(missing_parts, key_points)
