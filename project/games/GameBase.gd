@@ -15,6 +15,7 @@ var is_running: bool = false
 func start_game() -> void:
 	score = 0
 	is_running = true
+	SessionManager.reset_session()
 	score_changed.emit(score)
 
 func end_game() -> void:

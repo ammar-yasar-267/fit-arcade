@@ -1,6 +1,5 @@
 extends ColorRect
 
-# Colors
 const BRAND_CYAN = Color("#06B6D4")
 const CARD_SURFACE = Color("#1A1640")
 const TEXT_PRIMARY = Color("#FFFFFF")
@@ -19,87 +18,94 @@ func _get_game_accent(game_id: String) -> Color:
 
 func _ready() -> void:
 	_build_ui()
+	_add_settings_button()
 	if OS.get_name() == "Android":
 		OS.request_permissions()
+
+func _add_settings_button() -> void:
+	var btn := Button.new()
+	btn.text = "⚙"
+	btn.flat = true
+	btn.add_theme_font_size_override("font_size", 36)
+	btn.add_theme_color_override("font_color", TEXT_SECONDARY)
+	btn.add_theme_color_override("font_hover_color", TEXT_PRIMARY)
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	btn.offset_top = 16
+	btn.offset_right = -16
+	btn.offset_left = btn.offset_right - 56
+	btn.offset_bottom = btn.offset_top + 56
+	btn.pressed.connect(func(): get_tree().change_scene_to_file("res://ui/SettingsMenu.tscn"))
+	add_child(btn)
 
 func _build_ui() -> void:
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 32)
-	margin.add_theme_constant_override("margin_right", 32)
-	margin.add_theme_constant_override("margin_top", 60)
-	margin.add_theme_constant_override("margin_bottom", 60) # Increased bottom margin
+	margin.add_theme_constant_override("margin_left", 28)
+	margin.add_theme_constant_override("margin_right", 28)
+	margin.add_theme_constant_override("margin_top", 52)
+	margin.add_theme_constant_override("margin_bottom", 40)
 	add_child(margin)
 
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 48) # Increased separation
+	vbox.add_theme_constant_override("separation", 32)
 	margin.add_child(vbox)
 
 	# --- Header ---
 	var header = VBoxContainer.new()
+	header.add_theme_constant_override("separation", 8)
+	vbox.add_child(header)
+
 	var title = Label.new()
 	title.text = "FitArcade"
-	title.add_theme_font_size_override("font_size", 77)
+	title.add_theme_font_size_override("font_size", 56)
 	title.add_theme_color_override("font_color", BRAND_CYAN)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	header.add_child(title)
-	
+
 	var subtitle = Label.new()
-	subtitle.text = "Exergaming Platform"
-	subtitle.add_theme_font_size_override("font_size", 29)
+	subtitle.text = "Move your body. Control the game."
+	subtitle.add_theme_font_size_override("font_size", 20)
 	subtitle.add_theme_color_override("font_color", TEXT_SECONDARY)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	header.add_child(subtitle)
-	vbox.add_child(header)
 
+	# --- Section header ---
+	var section_row = VBoxContainer.new()
+	section_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(section_row)
+
+	var section_label = Label.new()
+	section_label.text = "YOUR GAMES"
+	section_label.add_theme_font_size_override("font_size", 14)
+	section_label.add_theme_color_override("font_color", TEXT_SECONDARY)
+	section_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	section_row.add_child(section_label)
+
+	var sep = HSeparator.new()
+	sep.add_theme_color_override("color", Color("#FFFFFF", 0.08))
+	section_row.add_child(sep)
+
+	# --- Game cards scroll ---
 	var scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED # Disable horizontal scroll bar
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vbox.add_child(scroll)
-	
+
 	var games_vbox = VBoxContainer.new()
 	games_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	games_vbox.add_theme_constant_override("separation", 16)
+	games_vbox.add_theme_constant_override("separation", 14)
 	scroll.add_child(games_vbox)
 
 	_create_game_card(games_vbox, "Chrome Dino", "Jumping Jacks", "dino")
 	_create_game_card(games_vbox, "Lane Switcher", "Lunges", "switcher")
 	_create_game_card(games_vbox, "Flappy Bird", "Arm Raises", "flappy")
 
-func _create_stat_card(parent: Control, title: String, value: String) -> void:
-	var panel = PanelContainer.new()
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var style = StyleBoxFlat.new()
-	style.bg_color = CARD_SURFACE
-	style.corner_radius_top_left = 12
-	style.corner_radius_top_right = 12
-	style.corner_radius_bottom_left = 12
-	style.corner_radius_bottom_right = 12
-	style.content_margin_top = 16
-	style.content_margin_bottom = 16
-	panel.add_theme_stylebox_override("panel", style)
-	
-	var vbox = VBoxContainer.new()
-	var val_label = Label.new()
-	val_label.text = value
-	val_label.add_theme_font_size_override("font_size", 38)
-	val_label.add_theme_color_override("font_color", BRAND_CYAN)
-	val_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(val_label)
-	
-	var title_label = Label.new()
-	title_label.text = title
-	title_label.add_theme_font_size_override("font_size", 22)
-	title_label.add_theme_color_override("font_color", TEXT_SECONDARY)
-	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title_label)
-	
-	panel.add_child(vbox)
-	parent.add_child(panel)
-
 func _create_game_card(parent: Control, game_name: String, exercise_name: String, game_id: String) -> void:
+	var accent = _get_game_accent(game_id)
+
 	var card = PanelContainer.new()
-	card.custom_minimum_size = Vector2(0, 150)
+	card.custom_minimum_size = Vector2(0, 180)
 	var style = StyleBoxFlat.new()
 	style.bg_color = CARD_SURFACE
 	style.corner_radius_top_left = 16
@@ -109,20 +115,27 @@ func _create_game_card(parent: Control, game_name: String, exercise_name: String
 	card.add_theme_stylebox_override("panel", style)
 
 	var hbox = HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 0) # Manual padding control
+	hbox.add_theme_constant_override("separation", 0)
 	card.add_child(hbox)
 
-	# Left Icon
+	# Left accent strip
+	var accent_strip = ColorRect.new()
+	accent_strip.color = accent
+	accent_strip.custom_minimum_size = Vector2(4, 0)
+	accent_strip.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	hbox.add_child(accent_strip)
+
+	# Icon section
 	var icon_margin := MarginContainer.new()
-	icon_margin.add_theme_constant_override("margin_left", 20)
-	icon_margin.add_theme_constant_override("margin_right", 20)
+	icon_margin.add_theme_constant_override("margin_left", 18)
+	icon_margin.add_theme_constant_override("margin_right", 16)
 	hbox.add_child(icon_margin)
 
 	var icon_panel = PanelContainer.new()
-	icon_panel.custom_minimum_size = Vector2(90, 90)
+	icon_panel.custom_minimum_size = Vector2(100, 100)
 	icon_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var icon_style = StyleBoxFlat.new()
-	icon_style.bg_color = Color("#121028")
+	icon_style.bg_color = Color(accent.r, accent.g, accent.b, 0.15)
 	icon_style.corner_radius_top_left = 18
 	icon_style.corner_radius_top_right = 18
 	icon_style.corner_radius_bottom_left = 18
@@ -135,7 +148,7 @@ func _create_game_card(parent: Control, game_name: String, exercise_name: String
 
 	var icon = TextureRect.new()
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.custom_minimum_size = Vector2(64, 64)
+	icon.custom_minimum_size = Vector2(68, 68)
 	match game_id:
 		"dino": icon.texture = ICON_DINO
 		"flappy": icon.texture = ICON_FLAPPY
@@ -143,27 +156,32 @@ func _create_game_card(parent: Control, game_name: String, exercise_name: String
 		_: icon.texture = ICON_DINO
 	icon_box.add_child(icon)
 
+	# Text content
 	var vbox = VBoxContainer.new()
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_theme_constant_override("separation", 6)
-	# Add right margin to prevent collision with play button
+	vbox.add_theme_constant_override("separation", 8)
 	var vbox_margin := MarginContainer.new()
 	vbox_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox_margin.add_theme_constant_override("margin_right", 15)
+	vbox_margin.add_theme_constant_override("margin_right", 12)
 	vbox_margin.add_child(vbox)
 	hbox.add_child(vbox_margin)
 
 	var name_label = Label.new()
 	name_label.text = game_name
-	name_label.add_theme_font_size_override("font_size", 35)
+	name_label.add_theme_font_size_override("font_size", 36)
 	name_label.add_theme_color_override("font_color", TEXT_PRIMARY)
 	vbox.add_child(name_label)
 
 	var pill = PanelContainer.new()
 	pill.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	var pill_style = StyleBoxFlat.new()
-	pill_style.bg_color = Color("#201C48")
+	pill_style.bg_color = Color(accent.r, accent.g, accent.b, 0.12)
+	pill_style.border_width_left = 1
+	pill_style.border_width_right = 1
+	pill_style.border_width_top = 1
+	pill_style.border_width_bottom = 1
+	pill_style.border_color = Color(accent.r, accent.g, accent.b, 0.35)
 	pill_style.corner_radius_top_left = 999
 	pill_style.corner_radius_top_right = 999
 	pill_style.corner_radius_bottom_left = 999
@@ -177,48 +195,60 @@ func _create_game_card(parent: Control, game_name: String, exercise_name: String
 
 	var pill_label = Label.new()
 	pill_label.text = exercise_name
-	pill_label.add_theme_font_size_override("font_size", 21)
-	pill_label.add_theme_color_override("font_color", _get_game_accent(game_id))
+	pill_label.add_theme_font_size_override("font_size", 19)
+	pill_label.add_theme_color_override("font_color", accent)
 	pill.add_child(pill_label)
 
-	# Right Play Strip
+	# Play strip
 	var play_strip := Button.new()
-	play_strip.custom_minimum_size = Vector2(100, 0)
+	play_strip.custom_minimum_size = Vector2(90, 0)
 	play_strip.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	play_strip.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	var play_style := StyleBoxFlat.new()
-	var base_play_color = _get_game_accent(game_id).darkened(0.25)
+	var base_play_color = accent.darkened(0.3)
 	play_style.bg_color = base_play_color
 	play_style.corner_radius_top_right = 16
 	play_style.corner_radius_bottom_right = 16
 	play_strip.add_theme_stylebox_override("normal", play_style)
-	
-	var play_icon := Label.new()
-	play_icon.text = "▶"
-	play_icon.add_theme_font_size_override("font_size", 44) # Slightly smaller to fit better
-	play_icon.add_theme_color_override("font_color", Color(1, 1, 1, 0.4))
-	play_icon.set_anchors_preset(Control.PRESET_CENTER)
-	play_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	play_icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	# Use a CenterContainer inside the button to guarantee alignment
+	var play_hover_style := play_style.duplicate()
+	play_hover_style.bg_color = accent.darkened(0.15)
+	play_strip.add_theme_stylebox_override("hover", play_hover_style)
+
 	var play_center := CenterContainer.new()
 	play_center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	play_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	play_strip.add_child(play_center)
-	play_center.add_child(play_icon)
-	
+
+	var play_col := VBoxContainer.new()
+	play_col.alignment = BoxContainer.ALIGNMENT_CENTER
+	play_col.add_theme_constant_override("separation", 2)
+	play_center.add_child(play_col)
+
+	var play_arrow := Label.new()
+	play_arrow.text = "▶"
+	play_arrow.add_theme_font_size_override("font_size", 26)
+	play_arrow.add_theme_color_override("font_color", Color(1, 1, 1, 0.75))
+	play_arrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	play_col.add_child(play_arrow)
+
+	var play_text := Label.new()
+	play_text.text = "PLAY"
+	play_text.add_theme_font_size_override("font_size", 14)
+	play_text.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
+	play_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	play_col.add_child(play_text)
+
 	play_strip.pressed.connect(_on_game_selected.bind(game_id))
 	hbox.add_child(play_strip)
 
-	# Full card click overlay with hover effects
+	# Full card click overlay
 	var full_click := Button.new()
 	full_click.set_anchors_preset(Control.PRESET_FULL_RECT)
 	full_click.flat = true
 	full_click.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	full_click.pressed.connect(_on_game_selected.bind(game_id))
 	card.add_child(full_click)
-	
-	# Restore Hover Effects
+
 	full_click.mouse_entered.connect(func():
 		style.bg_color = CARD_SURFACE.lightened(0.08)
 		play_style.bg_color = base_play_color.lightened(0.15)

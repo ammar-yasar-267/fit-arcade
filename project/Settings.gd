@@ -10,7 +10,7 @@ var infer_max_dim: int = 280
 
 # Rep detection thresholds
 var arm_raise_start_max: float = 48.0
-var arm_raise_end_min: float = 82.0
+var arm_raise_end_min: float = 130.0
 
 const SETTINGS_FILE := "user://fitarcade_settings.cfg"
 const DEFAULTS := {
@@ -19,7 +19,7 @@ const DEFAULTS := {
 	"frame_interval_ms": 50,
 	"infer_max_dim": 280,
 	"arm_raise_start_max": 48.0,
-	"arm_raise_end_min": 82.0,
+	"arm_raise_end_min": 130.0,
 }
 
 func _ready() -> void:

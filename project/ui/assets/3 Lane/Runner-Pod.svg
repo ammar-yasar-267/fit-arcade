@@ -1,10 +1,51 @@
-<svg width="64" height="80" viewBox="0 0 64 80" xmlns="http://www.w3.org/2000/svg">
-  <polygon points="20,60 44,60 32,80" fill="#7C3AED" opacity="0.6"/>
-  <polygon points="26,60 38,60 32,75" fill="#FFFFFF" opacity="0.8"/>
-  
-  <polygon points="32,10 56,60 8,60" fill="#06B6D4"/>
-  
-  <polygon points="32,25 46,55 18,55" fill="#0EA5E9"/>
-  
-  <polygon points="32,35 38,50 26,50" fill="#FFFFFF"/>
+<svg width="80" height="100" viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="thrustGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <ellipse cx="40" cy="97" rx="20" ry="10" fill="#7C3AED" opacity="0.25" filter="url(#thrustGlow)"/>
+  <ellipse cx="40" cy="94" rx="14" ry="8" fill="#7C3AED" opacity="0.45"/>
+  <ellipse cx="40" cy="91" rx="9" ry="6" fill="#A78BFA" opacity="0.65" filter="url(#glow)"/>
+  <ellipse cx="40" cy="89" rx="5" ry="3.5" fill="#C4B5FD" opacity="0.8"/>
+  <ellipse cx="40" cy="88" rx="2.5" ry="2" fill="#FFFFFF" opacity="0.7"/>
+
+  <polygon points="2,68 24,42 24,74" fill="#0EA5E9" opacity="0.85"/>
+  <polygon points="6,66 24,46 24,72" fill="#67E8F9" opacity="0.2"/>
+  <line x1="2" y1="68" x2="24" y2="42" stroke="#67E8F9" stroke-width="1.5" opacity="0.5"/>
+
+  <polygon points="78,68 56,42 56,74" fill="#0EA5E9" opacity="0.85"/>
+  <polygon points="74,66 56,46 56,72" fill="#67E8F9" opacity="0.2"/>
+  <line x1="78" y1="68" x2="56" y2="42" stroke="#67E8F9" stroke-width="1.5" opacity="0.5"/>
+
+  <ellipse cx="40" cy="48" rx="22" ry="34" fill="#06B6D4" filter="url(#glow)"/>
+  <ellipse cx="32" cy="36" rx="10" ry="18" fill="#FFFFFF" opacity="0.09"/>
+
+  <ellipse cx="40" cy="30" rx="12" ry="14" fill="#0C1A2E"/>
+  <ellipse cx="40" cy="30" rx="12" ry="14" fill="none" stroke="#67E8F9" stroke-width="2.5" filter="url(#glow)"/>
+  <ellipse cx="40" cy="30" rx="9" ry="11" fill="#0EA5E9" opacity="0.15"/>
+  <ellipse cx="35" cy="24" rx="4" ry="6" fill="#FFFFFF" opacity="0.08"/>
+
+  <polygon points="40,4 45,22 35,22" fill="#0EA5E9" filter="url(#glow)"/>
+  <polygon points="40,8 43,22 37,22" fill="#67E8F9" opacity="0.4"/>
+
+  <rect x="18" y="62" width="10" height="18" rx="5" fill="#0EA5E9" filter="url(#glow)"/>
+  <rect x="52" y="62" width="10" height="18" rx="5" fill="#0EA5E9" filter="url(#glow)"/>
+
+  <ellipse cx="23" cy="80" rx="7" ry="4" fill="#7C3AED" opacity="0.55" filter="url(#thrustGlow)"/>
+  <ellipse cx="57" cy="80" rx="7" ry="4" fill="#7C3AED" opacity="0.55" filter="url(#thrustGlow)"/>
+
+  <path d="M 22 52 Q 40 58 58 52" stroke="#67E8F9" stroke-width="1.5" fill="none" opacity="0.35"/>
 </svg>

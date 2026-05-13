@@ -1,76 +1,67 @@
 extends ExerciseBase
 
-## Lunge detection using hip descent ratio.
-## Requires the descent to be SUSTAINED for several frames to reject jitter.
-## Stores lunge_side (0=left, 1=right) at the moment the lunge peaks,
-## based on which ankle is lower on screen (higher Y) — the leading foot.
+## Lunge detection using knee bend angle (hip → knee → ankle).
+## This gives a 50-80° signal change vs the ~0.06 unit hip-ratio change,
+## making it far more robust against noise and distance variation.
+## Asymmetry requirement (one knee bends much more than the other)
+## rejects squats, sitting, and other symmetric bends.
 
 func _init():
 	exercise_name = "Lunges"
 
-## Accessible by SwitcherGame to know which direction to switch
 var lunge_side: int = -1
 
 var frame_counter := 0
-var hold_count := 0       # frames we've been above the END threshold
-const HOLD_REQUIRED := 4  # must sustain for this many frames to confirm lunge
+var hold_count := 0
+var dropout_count := 0
+const HOLD_REQUIRED := 3    # ~150ms at 20fps — user's lunges are shallow and brief
+const DROPOUT_ALLOWED := 1  # tight: we don't want stale counts carrying over
 
 func process_frame(landmarks: MediaPipeNormalizedLandmarks, current_state: ExerciseRecognizer.State) -> ExerciseRecognizer.State:
-	var l_shoulder = get_landmark_pos(landmarks, 11)
-	var r_shoulder = get_landmark_pos(landmarks, 12)
-	var l_hip      = get_landmark_pos(landmarks, 23)
-	var r_hip      = get_landmark_pos(landmarks, 24)
-	var l_ankle    = get_landmark_pos(landmarks, 27)
-	var r_ankle    = get_landmark_pos(landmarks, 28)
-	var l_knee     = get_landmark_pos(landmarks, 25)
-	var r_knee     = get_landmark_pos(landmarks, 26)
+	var l_hip   = get_landmark_pos(landmarks, 23)
+	var r_hip   = get_landmark_pos(landmarks, 24)
+	var l_knee  = get_landmark_pos(landmarks, 25)
+	var r_knee  = get_landmark_pos(landmarks, 26)
+	var l_ankle = get_landmark_pos(landmarks, 27)
+	var r_ankle = get_landmark_pos(landmarks, 28)
 
-	# Use knees if ankles are missing to allow user to stand closer
-	var lower_ref_y: float
-	if l_ankle != Vector3.ZERO and r_ankle != Vector3.ZERO:
-		lower_ref_y = (l_ankle.y + r_ankle.y) / 2.0
-	elif l_knee != Vector3.ZERO and r_knee != Vector3.ZERO:
-		# If using knees, we adjust the height to estimate where ankles would be
-		lower_ref_y = ((l_knee.y + r_knee.y) / 2.0) + 0.15 
-	else:
-		hold_count = 0
+	if l_hip == Vector3.ZERO or r_hip == Vector3.ZERO:
+		return current_state
+	if l_knee == Vector3.ZERO or r_knee == Vector3.ZERO:
+		return current_state
+	if l_ankle == Vector3.ZERO or r_ankle == Vector3.ZERO:
+		# Ankles required for knee angle — user needs to step back from camera
 		return current_state
 
-	var shoulder_y  = (l_shoulder.y + r_shoulder.y) / 2.0
-	var hip_y       = (l_hip.y     + r_hip.y)      / 2.0
-	var body_height = lower_ref_y - shoulder_y + 0.001
-	var hip_ratio   = (hip_y - shoulder_y) / body_height
-
-	# Clamp to ignore wild tracking artifacts
-	if hip_ratio < 0.0 or hip_ratio > 2.0:
-		hold_count = 0
-		return current_state
+	var l_angle = calculate_angle(l_hip, l_knee, l_ankle)
+	var r_angle = calculate_angle(r_hip, r_knee, r_ankle)
+	var min_angle  = min(l_angle, r_angle)
+	var asymmetry  = abs(l_angle - r_angle)
 
 	frame_counter += 1
-	if frame_counter % 20 == 0:
-		print("Lunge Debug | hip_ratio: %.3f | hold: %d | state: %s" % [hip_ratio, hold_count, str(current_state)])
+	if frame_counter % 15 == 0:
+		print("Lunge | L=%.1f° R=%.1f° asym=%.1f° hold=%d drop=%d | %s" % [l_angle, r_angle, asymmetry, hold_count, dropout_count, str(current_state)])
 
-	# Adjusted sensitivity for better detection when closer
-	# Standing: ~0.40–0.47
-	# Lunge:    ~0.49–0.58
-	var is_start = hip_ratio < 0.45
-	
-	if hip_ratio > 0.49:
+	# Standing:   both knees straight, min_angle > 155°
+	# Lunge:      one knee clearly bent (< 140°) AND asymmetric (> 20°)
+	#             Asymmetry rejects squats/sitting where both knees bend together.
+	#             140° threshold based on observed data: user's lunges reach 126-140°.
+	var is_start   = min_angle > 155.0
+	var is_lunging = min_angle < 140.0 and asymmetry > 20.0
+
+	if is_lunging:
 		hold_count += 1
+		dropout_count = 0
 	else:
-		hold_count = 0
-		
-	var is_end = hold_count >= 3 # Reduced hold required for snappier detection
+		dropout_count += 1
+		if dropout_count > DROPOUT_ALLOWED:
+			hold_count = 0
 
-	# Side detection: compare ankles if possible, otherwise use knees
-	if hip_ratio > 0.47:
-		var left_lower = l_ankle.y if l_ankle != Vector3.ZERO else l_knee.y
-		var right_lower = r_ankle.y if r_ankle != Vector3.ZERO else r_knee.y
-		
-		if left_lower > right_lower:
-			lunge_side = 1  # Right foot forward
-		else:
-			lunge_side = 0  # Left foot forward
+	var is_end = hold_count >= HOLD_REQUIRED
+
+	# Side: whichever knee is more bent is the lunging leg
+	if is_lunging:
+		lunge_side = 0 if l_angle < r_angle else 1
 
 	match current_state:
 		ExerciseRecognizer.State.IDLE, ExerciseRecognizer.State.REP_COUNTED, ExerciseRecognizer.State.INVALID:
@@ -80,7 +71,7 @@ func process_frame(landmarks: MediaPipeNormalizedLandmarks, current_state: Exerc
 		ExerciseRecognizer.State.START_POSITION:
 			if is_end:
 				return ExerciseRecognizer.State.END_POSITION
-			elif not is_start and not is_end:
+			elif not is_start:
 				return ExerciseRecognizer.State.MOVEMENT_PHASE
 		ExerciseRecognizer.State.MOVEMENT_PHASE:
 			if is_end:
@@ -89,6 +80,7 @@ func process_frame(landmarks: MediaPipeNormalizedLandmarks, current_state: Exerc
 				return ExerciseRecognizer.State.START_POSITION
 		ExerciseRecognizer.State.END_POSITION:
 			hold_count = 0
+			dropout_count = 0
 			return ExerciseRecognizer.State.REP_COUNTED
 
 	return current_state

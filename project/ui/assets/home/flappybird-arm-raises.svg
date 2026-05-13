@@ -1,15 +1,43 @@
 <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-  <rect width="100" height="100" rx="20" fill="#1A1640" stroke="#2A2550" stroke-width="2"/>
-  
-  <rect x="65" y="15" width="20" height="25" fill="#EF4444" rx="2"/>
-  <rect x="62" y="35" width="26" height="6" fill="#EF4444" rx="2"/>
-  <rect x="65" y="65" width="20" height="25" fill="#EF4444" rx="2"/>
-  <rect x="62" y="65" width="26" height="6" fill="#EF4444" rx="2"/>
+  <defs>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
 
-  <circle cx="35" cy="40" r="6" fill="#06B6D4" />
-  <line x1="35" y1="46" x2="35" y2="75" stroke="#06B6D4" stroke-width="4" stroke-linecap="round"/>
-  <path d="M 15 45 L 35 55 L 55 45" stroke="#06B6D4" stroke-width="4" stroke-linecap="round" fill="none"/>
-  
-  <path d="M 18 55 Q 26 62 35 55" stroke="#06B6D4" stroke-width="2" stroke-dasharray="2 3" fill="none" opacity="0.6"/>
-  <path d="M 52 55 Q 44 62 35 55" stroke="#06B6D4" stroke-width="2" stroke-dasharray="2 3" fill="none" opacity="0.6"/>
+  <rect width="100" height="100" rx="16" fill="#1A1640"/>
+  <rect width="100" height="100" rx="16" fill="none" stroke="#2A2560" stroke-width="2"/>
+
+  <!-- Mini bird + pipe hint (corner) -->
+  <ellipse cx="80" cy="68" rx="8" ry="6" fill="#06B6D4" opacity="0.28"/>
+  <polygon points="87,67 93,69 87,71" fill="#F59E0B" opacity="0.35"/>
+  <rect x="74" y="74" width="12" height="20" rx="2" fill="#2D1B69" opacity="0.5"/>
+  <rect x="72" y="92" width="16" height="4" rx="2" fill="#EF4444" opacity="0.3"/>
+
+  <!-- Head -->
+  <circle cx="50" cy="21" r="9" fill="#06B6D4" filter="url(#glow)"/>
+  <circle cx="47" cy="18" r="4" fill="#FFFFFF" opacity="0.15"/>
+
+  <!-- Body -->
+  <line x1="50" y1="30" x2="50" y2="66" stroke="#06B6D4" stroke-width="5.5" stroke-linecap="round" filter="url(#glow)"/>
+
+  <!-- Arms raised high (arm raises exercise) -->
+  <line x1="50" y1="40" x2="26" y2="10" stroke="#06B6D4" stroke-width="5.5" stroke-linecap="round" filter="url(#glow)"/>
+  <line x1="50" y1="40" x2="74" y2="10" stroke="#06B6D4" stroke-width="5.5" stroke-linecap="round" filter="url(#glow)"/>
+  <circle cx="26" cy="10" r="4.5" fill="#0EA5E9" filter="url(#glow)"/>
+  <circle cx="74" cy="10" r="4.5" fill="#0EA5E9" filter="url(#glow)"/>
+
+  <!-- Legs -->
+  <line x1="50" y1="66" x2="38" y2="90" stroke="#06B6D4" stroke-width="5.5" stroke-linecap="round" filter="url(#glow)"/>
+  <line x1="50" y1="66" x2="62" y2="90" stroke="#06B6D4" stroke-width="5.5" stroke-linecap="round" filter="url(#glow)"/>
+  <circle cx="38" cy="90" r="4.5" fill="#0EA5E9" filter="url(#glow)"/>
+  <circle cx="62" cy="90" r="4.5" fill="#0EA5E9" filter="url(#glow)"/>
+
+  <!-- Upward arrow cues -->
+  <path d="M 20 14 L 16 20 M 20 14 L 24 20" stroke="#67E8F9" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.55"/>
+  <path d="M 80 14 L 76 20 M 80 14 L 84 20" stroke="#67E8F9" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.55"/>
 </svg>

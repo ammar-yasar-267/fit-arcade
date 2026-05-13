@@ -18,31 +18,77 @@ var step_label: Label
 var ready_button: Button
 var awaiting_start: bool = false
 
+func _game_display_name(game_id: String) -> String:
+	match game_id:
+		"dino": return "Chrome Dino"
+		"switcher": return "Lane Switcher"
+		"flappy": return "Flappy Bird"
+		_: return game_id.capitalize()
+
 func _ready():
 	GameManager.pending_game_name = GameManager.selected_game_name
 	GameManager.selected_game_name = ""
 	CalibrationManager.reset_calibration()
-	
+
 	landmarker_instance = pose_landmarker_scene.instantiate()
 	add_child(landmarker_instance)
-	
+
+	# Back button — sits above the overlay so it's always tappable
+	var back_btn := Button.new()
+	back_btn.text = "‹  Back"
+	back_btn.add_theme_font_size_override("font_size", 20)
+	back_btn.add_theme_color_override("font_color", TEXT_SECONDARY)
+	back_btn.add_theme_color_override("font_hover_color", TEXT_PRIMARY)
+	back_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var back_normal := StyleBoxFlat.new()
+	back_normal.bg_color = Color(0.06, 0.06, 0.14, 0.85)
+	back_normal.border_width_left = 1
+	back_normal.border_width_right = 1
+	back_normal.border_width_top = 1
+	back_normal.border_width_bottom = 1
+	back_normal.border_color = Color(1, 1, 1, 0.12)
+	back_normal.corner_radius_top_left = 999
+	back_normal.corner_radius_top_right = 999
+	back_normal.corner_radius_bottom_left = 999
+	back_normal.corner_radius_bottom_right = 999
+	back_normal.content_margin_left = 18
+	back_normal.content_margin_right = 18
+	back_normal.content_margin_top = 8
+	back_normal.content_margin_bottom = 8
+	back_btn.add_theme_stylebox_override("normal", back_normal)
+	var back_hover := back_normal.duplicate()
+	back_hover.bg_color = Color(0.1, 0.1, 0.22, 0.95)
+	back_hover.border_color = Color(1, 1, 1, 0.25)
+	back_btn.add_theme_stylebox_override("hover", back_hover)
+	back_btn.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	back_btn.offset_top = 16
+	back_btn.offset_left = 16
+	back_btn.offset_right = 130
+	back_btn.offset_bottom = 58
+	back_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://Main.tscn"))
+	add_child(back_btn)
+
 	overlay_rect = ColorRect.new()
-	overlay_rect.color = Color(0.02, 0.02, 0.07, 0.6) # Slightly more transparent for better depth
+	overlay_rect.color = Color(0.02, 0.02, 0.07, 0.55)
 	overlay_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(overlay_rect)
-	
-	var center_root = CenterContainer.new()
-	center_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay_rect.add_child(center_root)
-	
-	var outer = VBoxContainer.new()
-	outer.alignment = BoxContainer.ALIGNMENT_CENTER
-	outer.add_theme_constant_override("separation", 24)
-	center_root.add_child(outer)
-	
+
+	# Root layout: full-rect VBox aligned to bottom so card sits in lower portion
+	var root_margin := MarginContainer.new()
+	root_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root_margin.add_theme_constant_override("margin_left", 24)
+	root_margin.add_theme_constant_override("margin_right", 24)
+	root_margin.add_theme_constant_override("margin_bottom", 48)
+	overlay_rect.add_child(root_margin)
+
+	var outer := VBoxContainer.new()
+	outer.alignment = BoxContainer.ALIGNMENT_END
+	outer.add_theme_constant_override("separation", 20)
+	root_margin.add_child(outer)
+
 	var hero_card = PanelContainer.new()
 	hero_card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	hero_card.custom_minimum_size = Vector2(460, 0) # Reduced from 600
+	hero_card.custom_minimum_size = Vector2(500, 0)
 	var hero_style = StyleBoxFlat.new()
 	hero_style.bg_color = CARD_SURFACE
 	hero_style.border_width_top = 4
@@ -53,33 +99,40 @@ func _ready():
 	hero_style.corner_radius_bottom_right = 28
 	hero_style.content_margin_left = 32
 	hero_style.content_margin_right = 32
-	hero_style.content_margin_top = 32
-	hero_style.content_margin_bottom = 32
-	hero_style.shadow_color = Color(0, 0, 0, 0.3)
-	hero_style.shadow_size = 20
+	hero_style.content_margin_top = 28
+	hero_style.content_margin_bottom = 28
+	hero_style.shadow_color = Color(0, 0, 0, 0.4)
+	hero_style.shadow_size = 24
 	hero_card.add_theme_stylebox_override("panel", hero_style)
 	outer.add_child(hero_card)
-	
+
 	var hero = VBoxContainer.new()
 	hero.alignment = BoxContainer.ALIGNMENT_CENTER
-	hero.add_theme_constant_override("separation", 14)
+	hero.add_theme_constant_override("separation", 12)
 	hero_card.add_child(hero)
-	
+
 	title_label = Label.new()
 	title_label.text = "Calibration"
-	title_label.add_theme_font_size_override("font_size", 48) # Reduced from 61
+	title_label.add_theme_font_size_override("font_size", 44)
 	title_label.add_theme_color_override("font_color", BRAND_CYAN)
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hero.add_child(title_label)
-	
+
+	var game_name_label := Label.new()
+	game_name_label.text = "For: %s" % _game_display_name(GameManager.pending_game_name)
+	game_name_label.add_theme_font_size_override("font_size", 18)
+	game_name_label.add_theme_color_override("font_color", TEXT_SECONDARY)
+	game_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hero.add_child(game_name_label)
+
 	var subtitle = Label.new()
-	subtitle.text = "Get your body fully in frame"
-	subtitle.add_theme_font_size_override("font_size", 22) # Reduced from 27
+	subtitle.text = "Get your full body in frame"
+	subtitle.add_theme_font_size_override("font_size", 20)
 	subtitle.add_theme_color_override("font_color", TEXT_SECONDARY)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hero.add_child(subtitle)
-	
+
 	var status_chip = PanelContainer.new()
 	status_chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	var chip_style = StyleBoxFlat.new()
@@ -98,41 +151,40 @@ func _ready():
 	chip_style.content_margin_top = 8
 	chip_style.content_margin_bottom = 8
 	status_chip.add_theme_stylebox_override("panel", chip_style)
-	
+
 	status_chip_label = Label.new()
 	status_chip_label.text = "Waiting for pose"
-	status_chip_label.add_theme_font_size_override("font_size", 21)
+	status_chip_label.add_theme_font_size_override("font_size", 19)
 	status_chip_label.add_theme_color_override("font_color", TEXT_SECONDARY)
 	status_chip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_chip.add_child(status_chip_label)
 	hero.add_child(status_chip)
-	
+
 	detail_label = Label.new()
 	detail_label.text = "Step into the camera view so I can see your full body."
-	detail_label.add_theme_font_size_override("font_size", 24) # Reduced from 32
+	detail_label.add_theme_font_size_override("font_size", 21)
 	detail_label.add_theme_color_override("font_color", TEXT_PRIMARY)
 	detail_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hero.add_child(detail_label)
-	
+
 	step_label = Label.new()
 	step_label.text = ""
-	step_label.add_theme_font_size_override("font_size", 22)
+	step_label.add_theme_font_size_override("font_size", 20)
 	step_label.add_theme_color_override("font_color", TEXT_SECONDARY)
 	step_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	step_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	# Keep the verbose step list hidden by default to reduce visual clutter
 	step_label.visible = false
 	hero.add_child(step_label)
-	
+
 	ready_button = Button.new()
-	ready_button.text = "CONTINUING TO GAME..."
-	ready_button.add_theme_font_size_override("font_size", 28)
-	ready_button.add_theme_color_override("font_color", BRAND_CYAN) # Cyan text
-	ready_button.custom_minimum_size = Vector2(320, 64)
+	ready_button.text = "Let's Go →"
+	ready_button.add_theme_font_size_override("font_size", 26)
+	ready_button.add_theme_color_override("font_color", BRAND_CYAN)
+	ready_button.custom_minimum_size = Vector2(300, 60)
 	ready_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	var button_style = StyleBoxFlat.new()
-	button_style.bg_color = Color("#11102B", 0.9) # Dark navy
+	button_style.bg_color = Color("#11102B", 0.9)
 	button_style.border_width_left = 3
 	button_style.border_width_right = 3
 	button_style.border_width_top = 3
@@ -155,11 +207,11 @@ func _ready():
 	ready_button.add_theme_stylebox_override("hover", button_hover)
 	ready_button.hide()
 	ready_button.pressed.connect(_on_ready_pressed)
-	outer.add_child(ready_button)
-	
+	hero.add_child(ready_button)
+
 	if not ExerciseRecognizer.pose_processed.is_connected(_on_pose_processed):
 		ExerciseRecognizer.pose_processed.connect(_on_pose_processed)
-	
+
 	_update_ui_from_diagnosis(CalibrationManager.analyze_calibration_pose(null))
 
 func _on_pose_processed(landmarks):
@@ -172,7 +224,7 @@ func _on_pose_processed(landmarks):
 	if diagnosis.get("ready", false) and CalibrationManager.compute_and_save_thresholds(landmarks):
 		awaiting_start = true
 		status_chip_label.text = "Calibration complete"
-		detail_label.text = "Perfect framing. You’re ready to start the game."
+		detail_label.text = "Perfect framing. You're ready to go."
 		step_label.text = ""
 		ready_button.show()
 		var timer = get_tree().create_timer(1.2)
@@ -184,47 +236,16 @@ func _update_ui_from_diagnosis(diagnosis: Dictionary) -> void:
 
 	var message = str(diagnosis.get("message", ""))
 	var detail = str(diagnosis.get("detail", ""))
-	var missing: Array = diagnosis.get("missing", [])
 
 	if status_chip_label:
 		status_chip_label.text = message
 		status_chip_label.add_theme_color_override("font_color", SUCCESS if diagnosis.get("ready", false) else WARNING)
 
 	if detail_label:
-		# Show a single concise line of guidance only
 		detail_label.text = detail
 
-	# Hide verbose step list to keep UI minimal; optionally surface top hint only
 	if step_label:
 		step_label.visible = false
-
-func _build_step_items(missing: Array, is_ready: bool) -> Array[String]:
-	if is_ready:
-		return ["Hold still for a beat", "Keep your full body visible", "Press Continue when the button appears"]
-
-	if missing.is_empty():
-		return ["Step back until your full body fits in frame", "Keep both wrists and ankles visible", "Hold the pose steady"]
-
-	var steps: Array[String] = []
-	for item in missing:
-		match str(item):
-			"your head": steps.append("Move back or lower the camera so your head is visible")
-			"your left wrist": steps.append("Raise your left arm into view")
-			"your right wrist": steps.append("Raise your right arm into view")
-			"your left ankle": steps.append("Step back so your left foot is visible")
-			"your right ankle": steps.append("Step back so your right foot is visible")
-			_: steps.append("Keep your full body inside the frame")
-
-	steps.append("Hold the pose steady until calibration finishes")
-	return steps
-
-func _format_steps(steps: Array[String]) -> String:
-	if steps.is_empty():
-		return ""
-	var lines: Array[String] = []
-	for step in steps:
-		lines.append("• %s" % step)
-	return "\n".join(lines)
 
 func _on_ready_pressed():
 	if not CalibrationManager.is_calibrated:

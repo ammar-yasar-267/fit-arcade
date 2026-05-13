@@ -41,13 +41,15 @@ func process_frame(landmarks: MediaPipeNormalizedLandmarks, current_state: Exerc
 	var r_wrist = get_landmark_pos(landmarks, R_WRIST_INDEX)
 	var right_angle = calculate_angle(r_hip, r_shoulder, r_wrist)
 
-	var rep_angle = max(left_angle, right_angle)
+	var max_angle = max(left_angle, right_angle)
+	var min_angle = min(left_angle, right_angle)
 	var thresholds = _get_angle_thresholds()
 	var start_max = thresholds.get("start_max", 30.0)
 	var end_min = thresholds.get("end_min", 150.0)
-	
-	var is_start = rep_angle <= start_max
-	var is_end = rep_angle >= end_min
+
+	# Both arms must be down for start, both must be raised for end
+	var is_start = max_angle <= start_max
+	var is_end = min_angle >= end_min
 	
 	match current_state:
 		ExerciseRecognizer.State.IDLE, ExerciseRecognizer.State.REP_COUNTED, ExerciseRecognizer.State.INVALID:

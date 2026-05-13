@@ -15,6 +15,8 @@ var pose_canvas: CanvasLayer = null
 var state_label: Label = null
 var back_button: Button = null
 var overlay_root: Control = null
+var pause_overlay_ref: ColorRect = null
+var _paused_exercise = null
 # Timestamp of last detect_async call; -1 means no inference pending.
 # Using a timestamp instead of a boolean prevents permanent lockup when
 # MediaPipe does not call back (e.g. no person in frame).
@@ -196,10 +198,7 @@ func _start_exercise_and_game() -> void:
 					if game_instance is Node2D:
 						game_instance.position.x = (logical_width - 540.0) / 2.0
 					
-					# Hide the game's internal HUD (if it's not needed)
-					var game_hud = game_instance.get_node_or_null("HUD")
-					if game_hud and game_name != "dino": # Keep dino HUD if it's causing issues
-						game_hud.visible = false
+					# HUD.gd (inside the game scene) is the primary in-game HUD
 					
 					GameManager.set_active_game(game_instance)
 					game_instance.start_game()
@@ -219,211 +218,188 @@ func _start_exercise_and_game() -> void:
 
 func _create_pose_preview() -> void:
 	pose_canvas = CanvasLayer.new()
-	pose_canvas.layer = 10 # On top of game
-	
+	pose_canvas.layer = 10
+
 	overlay_root = Control.new()
 	overlay_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	pose_canvas.add_child(overlay_root)
 
-	# Top chips row: back + status
-	var top_bar := HBoxContainer.new()
-	top_bar.anchor_left = 0.0
-	top_bar.anchor_top = 0.0
-	top_bar.anchor_right = 1.0
-	top_bar.anchor_bottom = 0.0
-	top_bar.offset_left = 10
-	top_bar.offset_top = 10
-	top_bar.offset_right = -10
-	top_bar.add_theme_constant_override("separation", 10)
-	overlay_root.add_child(top_bar)
+	# --- Full-screen invisible tap area → shows pause menu ---
+	var tap_btn := Button.new()
+	tap_btn.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tap_btn.flat = true
+	var tap_style := StyleBoxFlat.new()
+	tap_style.bg_color = Color(0, 0, 0, 0)
+	tap_btn.add_theme_stylebox_override("normal", tap_style)
+	tap_btn.add_theme_stylebox_override("hover", tap_style)
+	tap_btn.add_theme_stylebox_override("pressed", tap_style)
+	tap_btn.mouse_default_cursor_shape = Control.CURSOR_ARROW
+	tap_btn.pressed.connect(_on_screen_tapped)
+	overlay_root.add_child(tap_btn)
 
-	back_button = Button.new()
-	back_button.text = "← BACK"
-	back_button.add_theme_font_size_override("font_size", 32)
-	back_button.custom_minimum_size = Vector2(160, 56)
-	back_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var back_style := StyleBoxFlat.new()
-	back_style.bg_color = Color("#1A1640", 0.8)
-	back_style.border_width_left = 2
-	back_style.border_width_right = 2
-	back_style.border_width_top = 2
-	back_style.border_width_bottom = 2
-	back_style.border_color = Color("#06B6D4", 0.5)
-	back_style.corner_radius_top_left = 16
-	back_style.corner_radius_top_right = 16
-	back_style.corner_radius_bottom_left = 16
-	back_style.corner_radius_bottom_right = 16
-	back_style.content_margin_top = 8
-	back_style.content_margin_bottom = 8
-	back_style.content_margin_left = 20
-	back_style.content_margin_right = 20
-	back_button.add_theme_stylebox_override("normal", back_style)
-	
-	var back_hover := back_style.duplicate()
-	back_hover.bg_color = Color("#2A2660", 0.9)
-	back_hover.border_color = Color("#06B6D4", 1.0)
-	back_button.add_theme_stylebox_override("hover", back_hover)
-	
-	back_button.pressed.connect(_back)
-	top_bar.add_child(back_button)
+	# --- Pause overlay (hidden by default) ---
+	pause_overlay_ref = ColorRect.new()
+	pause_overlay_ref.color = Color(0, 0, 0, 0.78)
+	pause_overlay_ref.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_overlay_ref.visible = false
 
-	# Spacer to push timer to the right
-	var mid_spacer := Control.new()
-	mid_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_bar.add_child(mid_spacer)
-	
-	var timer_panel := PanelContainer.new()
-	timer_panel.custom_minimum_size = Vector2(160, 56) # Same as back button
-	var tstyle := StyleBoxFlat.new()
-	tstyle.bg_color = Color("#1A1640", 0.7) # Match back button theme
-	tstyle.border_width_left = 2
-	tstyle.border_width_right = 2
-	tstyle.border_width_top = 2
-	tstyle.border_width_bottom = 2
-	tstyle.border_color = Color("#06B6D4", 0.6) # Cyan border for "active" timer
-	tstyle.corner_radius_top_left = 16
-	tstyle.corner_radius_top_right = 16
-	tstyle.corner_radius_bottom_left = 16
-	tstyle.corner_radius_bottom_right = 16
-	tstyle.content_margin_top = 8
-	tstyle.content_margin_bottom = 8
-	tstyle.content_margin_left = 20
-	tstyle.content_margin_right = 20
-	timer_panel.add_theme_stylebox_override("panel", tstyle)
-	top_bar.add_child(timer_panel)
-	
-	timer_label = Label.new()
-	timer_label.text = "00:00"
-	timer_label.add_theme_font_size_override("font_size", 32) # Same as back button
-	timer_label.add_theme_color_override("font_color", Color("#FFFFFF"))
-	timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	timer_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	timer_panel.add_child(timer_label)
-	
+	var pause_center := CenterContainer.new()
+	pause_center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_overlay_ref.add_child(pause_center)
 
-	# Bottom dock: Wide bar with space on sides
-	var preview_container := PanelContainer.new()
-	preview_container.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	preview_container.anchor_left = 0.1
-	preview_container.anchor_right = 0.9
-	preview_container.anchor_top = 0.82
-	preview_container.anchor_bottom = 0.98
-	preview_container.offset_left = 0
-	preview_container.offset_right = 0
-	preview_container.offset_top = 0
-	preview_container.offset_bottom = 0
-	preview_container.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	preview_container.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	var pause_card := PanelContainer.new()
+	pause_card.custom_minimum_size = Vector2(380, 0)
+	var pause_card_style := StyleBoxFlat.new()
+	pause_card_style.bg_color = Color("#1A1640")
+	pause_card_style.border_width_top = 4
+	pause_card_style.border_color = Color("#06B6D4")
+	pause_card_style.corner_radius_top_left = 24
+	pause_card_style.corner_radius_top_right = 24
+	pause_card_style.corner_radius_bottom_left = 24
+	pause_card_style.corner_radius_bottom_right = 24
+	pause_card_style.content_margin_left = 32
+	pause_card_style.content_margin_right = 32
+	pause_card_style.content_margin_top = 32
+	pause_card_style.content_margin_bottom = 32
+	pause_card_style.shadow_color = Color(0, 0, 0, 0.5)
+	pause_card_style.shadow_size = 20
+	pause_card.add_theme_stylebox_override("panel", pause_card_style)
+	pause_center.add_child(pause_card)
 
-	# Deep navy theme
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#0A0A1A", 0.85) # Slight transparency
-	style.border_color = Color("#06B6D4")
-	style.border_width_top = 2
-	style.corner_radius_top_left = 20
-	style.corner_radius_top_right = 20
-	style.content_margin_left = 15
-	style.content_margin_right = 15
-	style.content_margin_top = 10
-	style.content_margin_bottom = 10
-	preview_container.add_theme_stylebox_override("panel", style)
+	var pause_inner := VBoxContainer.new()
+	pause_inner.alignment = BoxContainer.ALIGNMENT_CENTER
+	pause_inner.add_theme_constant_override("separation", 24)
+	pause_card.add_child(pause_inner)
 
-	var main_hbox := HBoxContainer.new()
-	main_hbox.add_theme_constant_override("separation", 20)
-	main_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	preview_container.add_child(main_hbox)
+	var pause_title := Label.new()
+	pause_title.text = "Paused"
+	pause_title.add_theme_font_size_override("font_size", 52)
+	pause_title.add_theme_color_override("font_color", Color("#06B6D4"))
+	pause_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pause_inner.add_child(pause_title)
 
-	# --- Left Side: Score ---
-	var score_box := VBoxContainer.new()
-	score_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	
-	score_label = Label.new()
-	score_label.text = "0"
-	score_label.add_theme_font_size_override("font_size", 64)
-	score_label.add_theme_color_override("font_color", Color("#06B6D4"))
-	score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	score_box.add_child(score_label)
-	
-	var score_title := Label.new()
-	score_title.text = "SCORE"
-	score_title.add_theme_font_size_override("font_size", 28)
-	score_title.add_theme_color_override("font_color", Color("#A09CC0"))
-	score_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	score_box.add_child(score_title)
-	main_hbox.add_child(score_box)
+	var resume_btn := _make_pause_btn("Resume", true)
+	resume_btn.pressed.connect(_resume_game)
+	pause_inner.add_child(resume_btn)
 
-	# --- Center: Camera Preview ---
-	var camera_box := VBoxContainer.new()
-	camera_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	camera_box.add_theme_constant_override("separation", 10)
+	var pause_menu_btn := _make_pause_btn("Main Menu", false)
+	pause_menu_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://Main.tscn"))
+	pause_inner.add_child(pause_menu_btn)
 
-	# Pose image (camera + skeleton)
+	overlay_root.add_child(pause_overlay_ref)
+
+	# --- Bottom dock: camera only, fixed-width centered card ---
+	var dock := PanelContainer.new()
+	dock.anchor_left = 0.5
+	dock.anchor_right = 0.5
+	dock.anchor_top = 1.0
+	dock.anchor_bottom = 1.0
+	dock.offset_left = -185
+	dock.offset_right = 185
+	dock.offset_top = -200
+	dock.offset_bottom = -16
+	var dock_style := StyleBoxFlat.new()
+	dock_style.bg_color = Color("#08081C", 0.96)
+	dock_style.border_color = Color("#06B6D4", 0.4)
+	dock_style.border_width_top = 2
+	dock_style.corner_radius_top_left = 32
+	dock_style.corner_radius_top_right = 32
+	dock_style.corner_radius_bottom_left = 32
+	dock_style.corner_radius_bottom_right = 32
+	dock_style.content_margin_left = 20
+	dock_style.content_margin_right = 20
+	dock_style.content_margin_top = 18
+	dock_style.content_margin_bottom = 18
+	dock.add_theme_stylebox_override("panel", dock_style)
+	overlay_root.add_child(dock)
+
+	var dock_center := CenterContainer.new()
+	dock_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dock_center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dock.add_child(dock_center)
+
+	# Camera feed — centered, fixed width
+	var cam_panel := PanelContainer.new()
+	cam_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var cam_style := StyleBoxFlat.new()
+	cam_style.bg_color = Color(0, 0, 0, 0.5)
+	cam_style.corner_radius_top_left = 10
+	cam_style.corner_radius_top_right = 10
+	cam_style.corner_radius_bottom_left = 10
+	cam_style.corner_radius_bottom_right = 10
+	cam_panel.add_theme_stylebox_override("panel", cam_style)
+	dock_center.add_child(cam_panel)
+
 	pose_preview = TextureRect.new()
 	pose_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pose_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	pose_preview.custom_minimum_size = Vector2(240, 135)
+	pose_preview.custom_minimum_size = Vector2(250, 148)
 	pose_preview.texture = ImageTexture.new()
-	
-	# Add a subtle border around the camera feed
-	var cam_border := PanelContainer.new()
-	var bstyle := StyleBoxFlat.new()
-	bstyle.bg_color = Color(0, 0, 0, 0.4)
-	bstyle.border_width_left = 2
-	bstyle.border_width_right = 2
-	bstyle.border_width_top = 2
-	bstyle.border_width_bottom = 2
-	bstyle.border_color = Color(0.2, 0.2, 0.4)
-	bstyle.corner_radius_top_left = 4
-	bstyle.corner_radius_top_right = 4
-	bstyle.corner_radius_bottom_left = 4
-	bstyle.corner_radius_bottom_right = 4
-	cam_border.add_theme_stylebox_override("panel", bstyle)
-	cam_border.add_child(pose_preview)
-	camera_box.add_child(cam_border)
-	
-	main_hbox.add_child(camera_box)
+	cam_panel.add_child(pose_preview)
 
-	# --- Right Side: Reps ---
-	var rep_box := VBoxContainer.new()
-	rep_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	
+	# Hidden labels — kept so signal handlers don't crash
+	timer_label = Label.new()
+	timer_label.visible = false
+	overlay_root.add_child(timer_label)
+
+	score_label = Label.new()
+	score_label.visible = false
+	overlay_root.add_child(score_label)
+
 	rep_label = Label.new()
-	rep_label.text = "0"
-	rep_label.add_theme_font_size_override("font_size", 64)
-	rep_label.add_theme_color_override("font_color", Color("#FFFFFF"))
-	rep_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	rep_box.add_child(rep_label)
+	rep_label.visible = false
+	overlay_root.add_child(rep_label)
 
-	var rep_title := Label.new()
-	rep_title.text = "REPS"
-	rep_title.add_theme_font_size_override("font_size", 28)
-	rep_title.add_theme_color_override("font_color", Color("#A09CC0"))
-	rep_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	rep_box.add_child(rep_title)
-	main_hbox.add_child(rep_box)
-	
-	# --- Center Screen: Start Prompt ---
 	prompt_label = Label.new()
-	prompt_label.text = "DO A REP TO START"
-	prompt_label.add_theme_font_size_override("font_size", 48)
-	prompt_label.add_theme_color_override("font_color", Color("#FFFFFF", 0.7))
-	prompt_label.set_anchors_preset(Control.PRESET_CENTER)
-	prompt_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	prompt_label.grow_vertical = Control.GROW_DIRECTION_BOTH
-	pose_canvas.add_child(prompt_label)
+	prompt_label.visible = false
+	overlay_root.add_child(prompt_label)
 
-	pose_canvas.add_child(preview_container)
 	add_child(pose_canvas)
 
-	# Connect exercise signals for debug display
+	# Connect signals
 	ExerciseRecognizer.rep_completed.connect(_on_preview_rep)
 	if game_instance:
 		if not game_instance.score_changed.is_connected(_on_game_score_changed):
 			game_instance.score_changed.connect(_on_game_score_changed)
 		if not game_instance.game_over.is_connected(_on_game_over_reset):
 			game_instance.game_over.connect(_on_game_over_reset)
-		is_timing = false # Wait for first rep to start timing
+		is_timing = false
 		elapsed_time = 0.0
+
+func _make_dock_icon_btn(icon: String, icon_size: int) -> Button:
+	var btn := Button.new()
+	btn.text = icon
+	btn.custom_minimum_size = Vector2(76, 76)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	btn.add_theme_font_size_override("font_size", icon_size)
+	btn.add_theme_color_override("font_color", Color("#9896C8"))
+	btn.add_theme_color_override("font_hover_color", Color("#FFFFFF"))
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color("#12112E")
+	normal.border_width_left = 2
+	normal.border_width_right = 2
+	normal.border_width_top = 2
+	normal.border_width_bottom = 2
+	normal.border_color = Color("#06B6D4", 0.5)
+	normal.corner_radius_top_left = 999
+	normal.corner_radius_top_right = 999
+	normal.corner_radius_bottom_left = 999
+	normal.corner_radius_bottom_right = 999
+	normal.shadow_color = Color("#06B6D4", 0.18)
+	normal.shadow_size = 10
+	normal.content_margin_left = 16
+	normal.content_margin_right = 16
+	normal.content_margin_top = 16
+	normal.content_margin_bottom = 16
+	btn.add_theme_stylebox_override("normal", normal)
+	var hover := normal.duplicate()
+	hover.bg_color = Color("#1C1A4A")
+	hover.border_color = Color("#06B6D4", 1.0)
+	hover.shadow_color = Color("#06B6D4", 0.45)
+	hover.shadow_size = 16
+	btn.add_theme_stylebox_override("hover", hover)
+	return btn
 
 func _make_chip_panel() -> PanelContainer:
 	var chip := PanelContainer.new()
@@ -462,6 +438,57 @@ func _make_chip_button(text: String) -> Button:
 	return btn
 
 
+func _on_screen_tapped() -> void:
+	if pause_overlay_ref and not pause_overlay_ref.visible:
+		if game_instance and game_instance.is_running:
+			_paused_exercise = ExerciseRecognizer.current_exercise
+			ExerciseRecognizer.current_exercise = null
+			game_instance.process_mode = Node.PROCESS_MODE_DISABLED
+			pause_overlay_ref.show()
+
+func _resume_game() -> void:
+	if _paused_exercise != null:
+		ExerciseRecognizer.current_exercise = _paused_exercise
+		_paused_exercise = null
+	if game_instance:
+		game_instance.process_mode = Node.PROCESS_MODE_INHERIT
+	if pause_overlay_ref:
+		pause_overlay_ref.hide()
+
+func _make_pause_btn(text: String, primary: bool) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.add_theme_font_size_override("font_size", 26)
+	btn.custom_minimum_size = Vector2(300, 58)
+	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var style := StyleBoxFlat.new()
+	if primary:
+		style.bg_color = Color("#06B6D4")
+	else:
+		style.bg_color = Color("#11102B")
+		style.border_width_left = 2
+		style.border_width_right = 2
+		style.border_width_top = 2
+		style.border_width_bottom = 2
+		style.border_color = Color("#06B6D4")
+	style.corner_radius_top_left = 14
+	style.corner_radius_top_right = 14
+	style.corner_radius_bottom_left = 14
+	style.corner_radius_bottom_right = 14
+	style.content_margin_left = 20
+	style.content_margin_right = 20
+	style.content_margin_top = 12
+	style.content_margin_bottom = 12
+	btn.add_theme_stylebox_override("normal", style)
+	var hover := style.duplicate()
+	if primary:
+		hover.bg_color = Color("#0891B2")
+	else:
+		hover.bg_color = Color("#1A1640")
+	btn.add_theme_stylebox_override("hover", hover)
+	return btn
+
 func _on_preview_rep() -> void:
 	if rep_label:
 		rep_label.text = str(SessionManager.current_reps)
@@ -478,11 +505,9 @@ func _on_game_score_changed(score_value: int) -> void:
 
 func _on_game_over_reset(_score: int) -> void:
 	is_timing = false
-	# We don't reset elapsed_time here so it stays visible on the HUD during Game Over
-	if prompt_label:
-		prompt_label.visible = true
+	# prompt handled by HUD.gd
 
-func _on_preview_form(message: String, is_good: bool) -> void:
+func _on_preview_form(_message: String, _is_good: bool) -> void:
 	pass
 
 func _get_state_name(state: int) -> String:
@@ -495,9 +520,17 @@ func _get_state_name(state: int) -> String:
 		_: return "?"
 
 func _on_game_over(score: int) -> void:
-	ExerciseRecognizer.set_active_exercise("")
-	# Styled game-over overlay
-	var overlay = ColorRect.new()
+	# If the game ended while paused, restore the exercise so Play Again works
+	if _paused_exercise != null:
+		ExerciseRecognizer.current_exercise = _paused_exercise
+		_paused_exercise = null
+	if game_instance:
+		game_instance.process_mode = Node.PROCESS_MODE_INHERIT
+
+	if pause_overlay_ref and pause_overlay_ref.visible:
+		pause_overlay_ref.hide()
+
+	var overlay := ColorRect.new()
 	overlay.color = Color(0, 0, 0, 0.85)
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 
@@ -505,102 +538,65 @@ func _on_game_over(score: int) -> void:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(root)
 
-	var panel = PanelContainer.new()
-	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	panel.custom_minimum_size = Vector2(520, 0) # Slightly wider
-	var pstyle = StyleBoxFlat.new()
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(460, 0)
+	var pstyle := StyleBoxFlat.new()
 	pstyle.bg_color = Color("#1A1640")
-	pstyle.corner_radius_top_left = 22
-	pstyle.corner_radius_top_right = 22
-	pstyle.corner_radius_bottom_left = 22
-	pstyle.corner_radius_bottom_right = 22
-	pstyle.content_margin_left = 18
-	pstyle.content_margin_right = 18
-	pstyle.content_margin_top = 18
-	pstyle.content_margin_bottom = 18
+	pstyle.border_width_top = 4
+	pstyle.border_color = Color("#06B6D4")
+	pstyle.corner_radius_top_left = 28
+	pstyle.corner_radius_top_right = 28
+	pstyle.corner_radius_bottom_left = 28
+	pstyle.corner_radius_bottom_right = 28
+	pstyle.content_margin_left = 32
+	pstyle.content_margin_right = 32
+	pstyle.content_margin_top = 32
+	pstyle.content_margin_bottom = 32
+	pstyle.shadow_color = Color(0, 0, 0, 0.5)
+	pstyle.shadow_size = 24
 	panel.add_theme_stylebox_override("panel", pstyle)
+	root.add_child(panel)
 
-	var inner = VBoxContainer.new()
+	var inner := VBoxContainer.new()
 	inner.alignment = BoxContainer.ALIGNMENT_CENTER
-	inner.add_theme_constant_override("separation", 24) # More space
+	inner.add_theme_constant_override("separation", 28)
 	panel.add_child(inner)
 
-	var title = Label.new()
-	title.text = "Game Over"
+	var title := Label.new()
+	title.text = "GAME OVER"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 61)
+	title.add_theme_font_size_override("font_size", 64)
 	title.add_theme_color_override("font_color", Color("#06B6D4"))
 	inner.add_child(title)
 
+	var secs := int(elapsed_time)
+	var time_str := "%d:%02d" % [secs / 60.0, secs % 60]
+
 	var chips_row := HBoxContainer.new()
 	chips_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	chips_row.add_theme_constant_override("separation", 20) # More space between chips
-
-	var score_chip := _make_result_chip("Score", str(score))
-	var reps_chip := _make_result_chip("Reps", str(SessionManager.current_reps))
-	chips_row.add_child(score_chip)
-	chips_row.add_child(reps_chip)
+	chips_row.add_theme_constant_override("separation", 12)
+	chips_row.add_child(_make_result_chip("Score", str(score)))
+	chips_row.add_child(_make_result_chip("Time", time_str))
+	chips_row.add_child(_make_result_chip("Reps", str(SessionManager.current_reps)))
 	inner.add_child(chips_row)
 
-	var buttons = HBoxContainer.new()
-	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
-	buttons.add_theme_constant_override("separation", 12)
-	buttons.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var btns_col := VBoxContainer.new()
+	btns_col.add_theme_constant_override("separation", 12)
+	inner.add_child(btns_col)
 
-	var replay_btn = Button.new()
-	replay_btn.text = "Play Again"
-	replay_btn.add_theme_font_size_override("font_size", 29)
-	replay_btn.custom_minimum_size = Vector2(140, 48)
-	var replay_style = StyleBoxFlat.new()
-	replay_style.bg_color = Color("#06B6D4")
-	replay_style.corner_radius_top_left = 12
-	replay_style.corner_radius_top_right = 12
-	replay_style.corner_radius_bottom_left = 12
-	replay_style.corner_radius_bottom_right = 12
-	replay_style.content_margin_left = 16
-	replay_style.content_margin_right = 16
-	replay_style.content_margin_top = 10
-	replay_style.content_margin_bottom = 10
-	replay_btn.add_theme_stylebox_override("normal", replay_style)
-	var replay_hover = replay_style.duplicate()
-	replay_hover.bg_color = Color("#0891B2")
-	replay_btn.add_theme_stylebox_override("hover", replay_hover)
+	var replay_btn := _make_pause_btn("Play Again", true)
 	replay_btn.pressed.connect(func():
 		if game_instance and game_instance.has_method("start_game"):
 			game_instance.start_game()
-			if overlay.get_parent(): overlay.get_parent().remove_child(overlay)
+			if overlay.get_parent():
+				overlay.get_parent().remove_child(overlay)
 	)
-	buttons.add_child(replay_btn)
+	btns_col.add_child(replay_btn)
 
-	var return_btn = Button.new()
-	return_btn.text = "Return to Menu"
-	return_btn.add_theme_font_size_override("font_size", 29)
-	return_btn.custom_minimum_size = Vector2(140, 48)
-	var return_style = StyleBoxFlat.new()
-	return_style.bg_color = Color("#171532")
-	return_style.border_color = Color("#06B6D4")
-	return_style.border_width_left = 1
-	return_style.border_width_right = 1
-	return_style.border_width_top = 1
-	return_style.border_width_bottom = 1
-	return_style.corner_radius_top_left = 12
-	return_style.corner_radius_top_right = 12
-	return_style.corner_radius_bottom_left = 12
-	return_style.corner_radius_bottom_right = 12
-	return_style.content_margin_left = 16
-	return_style.content_margin_right = 16
-	return_style.content_margin_top = 10
-	return_style.content_margin_bottom = 10
-	return_btn.add_theme_stylebox_override("normal", return_style)
-	var return_hover = return_style.duplicate()
-	return_hover.bg_color = Color("#1B1840")
-	return_btn.add_theme_stylebox_override("hover", return_hover)
-	return_btn.pressed.connect(func():
-		get_tree().change_scene_to_file("res://Main.tscn")
-	)
-	buttons.add_child(return_btn)
-	inner.add_child(buttons)
-	root.add_child(panel)
+	var menu_btn := _make_pause_btn("Main Menu", false)
+	menu_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://Main.tscn"))
+	btns_col.add_child(menu_btn)
+
 
 	if pose_canvas:
 		pose_canvas.add_child(overlay)
@@ -609,7 +605,7 @@ func _on_game_over(score: int) -> void:
 
 func _make_result_chip(label_text: String, value_text: String) -> PanelContainer:
 	var chip := PanelContainer.new()
-	chip.custom_minimum_size = Vector2(180, 120)
+	chip.custom_minimum_size = Vector2(130, 90)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("#11102B")
 	style.border_width_left = 2
@@ -641,7 +637,7 @@ func _make_result_chip(label_text: String, value_text: String) -> PanelContainer
 
 	var value := Label.new()
 	value.text = value_text
-	value.add_theme_font_size_override("font_size", 54) # Much larger
+	value.add_theme_font_size_override("font_size", 38)
 	value.add_theme_color_override("font_color", Color("#FFFFFF"))
 	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(value)
@@ -651,7 +647,7 @@ func _process(delta: float) -> void:
 	if is_timing:
 		elapsed_time += delta
 		if timer_label:
-			var mins = int(elapsed_time) / 60
+			var mins = int(elapsed_time) / 60.0
 			var secs = int(elapsed_time) % 60
 			timer_label.text = "%02d:%02d" % [mins, secs]
 	super (delta)
