@@ -4,8 +4,8 @@ extends Node
 
 # Performance tuning
 var delegate: int = MediaPipeTaskBaseOptions.DELEGATE_CPU
-var inference_timeout_ms: int = 300
-var frame_interval_ms: int = 50
+var inference_timeout_ms: int = 500
+var frame_interval_ms: int = 0
 var infer_max_dim: int = 280
 
 # Rep detection thresholds
@@ -15,8 +15,8 @@ var arm_raise_end_min: float = 130.0
 const SETTINGS_FILE := "user://fitarcade_settings.cfg"
 const DEFAULTS := {
 	"delegate": MediaPipeTaskBaseOptions.DELEGATE_CPU,
-	"inference_timeout_ms": 300,
-	"frame_interval_ms": 50,
+	"inference_timeout_ms": 500,
+	"frame_interval_ms": 0,
 	"infer_max_dim": 280,
 	"arm_raise_start_max": 48.0,
 	"arm_raise_end_min": 130.0,
