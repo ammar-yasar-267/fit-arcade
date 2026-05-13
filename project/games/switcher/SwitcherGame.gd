@@ -96,7 +96,15 @@ func _spawn_obstacle():
 	obs.texture = OBSTACLE_TEXTURE
 	obs.centered = true
 	obs.scale = Vector2(1.0, 1.0)
-	var lane = randi() % 3
+	var lane: int
+	if randf() < 0.75:
+		# Target the player's current lane
+		lane = current_lane
+	else:
+		# Pick a different lane for breathing room
+		var other_lanes = [0, 1, 2]
+		other_lanes.erase(current_lane)
+		lane = other_lanes[randi() % 2]
 	obs.position = Vector2(lane_x[lane], -40)
 	obstacle_container.add_child(obs)
 

@@ -8,9 +8,9 @@ var hud: CanvasLayer
 var ground: ColorRect
 var obstacle_container: Node2D
 
-var speed = 260.0
-var jump_velocity = -950.0
-var gravity = 1700.0
+var speed = 180.0
+var jump_velocity = -850.0
+var gravity = 1300.0
 var spawn_timer = 2.0
 var velocity_y = 0.0
 var has_started = false
@@ -66,6 +66,7 @@ func start_game():
 	player.position = Vector2(100, 500)
 	velocity_y = 0.0
 	spawn_timer = 2.0
+	speed = 180.0
 	has_started = false
 	for obs in obstacle_container.get_children():
 		obs.queue_free()
@@ -89,7 +90,7 @@ func _process(delta):
 	spawn_timer -= delta
 	if spawn_timer <= 0:
 		_spawn_obstacle()
-		spawn_timer = randf_range(1.0, 1.8)
+		spawn_timer = randf_range(2.0, 3.2)
 
 	for obs in obstacle_container.get_children():
 		obs.position.x -= speed * delta
