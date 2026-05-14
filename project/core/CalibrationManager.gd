@@ -63,17 +63,17 @@ func analyze_calibration_pose(pose_landmarks) -> Dictionary:
 		var x_ok = true
 		var y_ok = true
 
-		# By default allow a small off-screen margin
-		var x_min = -0.1
-		var x_max = 1.1
-		var y_min = -0.1
-		var y_max = 1.1
+		# By default allow a generous off-screen margin
+		var x_min = -0.25
+		var x_max = 1.25
+		var y_min = -0.2
+		var y_max = 1.2
 
 		# Relax horizontal bounds for wrists if they are raised upward (y small)
 		if point.name.find("wrist") != -1:
-			if pt.y < 0.18:
-				x_min = -0.25
-				x_max = 1.25
+			if pt.y < 0.30:
+				x_min = -0.40
+				x_max = 1.40
 
 		if pt.x < x_min or pt.x > x_max:
 			x_ok = false
@@ -104,8 +104,8 @@ func analyze_calibration_pose(pose_landmarks) -> Dictionary:
 		var body_height = max_y - min_y
 		var body_width = max_x - min_x
 		
-		# If body takes up more than 85% of screen height, person is too close
-		if body_height > 0.85:
+		# If body takes up more than 95% of screen height, person is too close
+		if body_height > 0.95:
 			result.message = "Too close to camera"
 			result.detail = "Step back a bit so your full body fits comfortably in frame."
 		else:
@@ -147,7 +147,7 @@ func compute_and_save_thresholds(pose_landmarks):
 			
 			for idx in key_indices:
 				var pt = landmarks[idx]
-				if pt.x < -0.1 or pt.x > 1.1 or pt.y < -0.1 or pt.y > 1.1:
+				if pt.x < -0.25 or pt.x > 1.25 or pt.y < -0.2 or pt.y > 1.2:
 					all_visible = false
 					break
 					
