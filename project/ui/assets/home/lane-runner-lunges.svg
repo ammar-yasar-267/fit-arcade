@@ -1,0 +1,46 @@
+<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="100" height="100" rx="16" fill="#1A1640"/>
+  <rect width="100" height="100" rx="16" fill="none" stroke="#2A2560" stroke-width="2"/>
+
+  <!-- Lane dashed lines -->
+  <line x1="18" y1="96" x2="18" y2="50" stroke="#7C3AED" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.45"/>
+  <line x1="50" y1="96" x2="50" y2="50" stroke="#7C3AED" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.45"/>
+  <line x1="82" y1="96" x2="82" y2="50" stroke="#7C3AED" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.45"/>
+  <line x1="6" y1="96" x2="94" y2="96" stroke="#3A2870" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Head (leaning forward) -->
+  <circle cx="55" cy="18" r="9" fill="#0EA5E9" filter="url(#glow)"/>
+  <circle cx="52" cy="15" r="4" fill="#FFFFFF" opacity="0.15"/>
+
+  <!-- Body (slight forward lean) -->
+  <line x1="55" y1="27" x2="52" y2="57" stroke="#0EA5E9" stroke-width="5.5" stroke-linecap="round" filter="url(#glow)"/>
+
+  <!-- Arms for balance -->
+  <line x1="53" y1="38" x2="30" y2="48" stroke="#0EA5E9" stroke-width="5.5" stroke-linecap="round" filter="url(#glow)"/>
+  <line x1="53" y1="38" x2="74" y2="29" stroke="#0EA5E9" stroke-width="5.5" stroke-linecap="round" filter="url(#glow)"/>
+  <circle cx="30" cy="48" r="4.5" fill="#06B6D4" filter="url(#glow)"/>
+  <circle cx="74" cy="29" r="4.5" fill="#06B6D4" filter="url(#glow)"/>
+
+  <!-- Front leg (lunging right) -->
+  <line x1="52" y1="57" x2="68" y2="72" stroke="#0EA5E9" stroke-width="5.5" stroke-linecap="round" filter="url(#glow)"/>
+  <line x1="68" y1="72" x2="72" y2="93" stroke="#0EA5E9" stroke-width="5.5" stroke-linecap="round" filter="url(#glow)"/>
+  <circle cx="72" cy="93" r="4.5" fill="#06B6D4" filter="url(#glow)"/>
+
+  <!-- Back leg (knee down) -->
+  <line x1="52" y1="57" x2="33" y2="68" stroke="#0EA5E9" stroke-width="5.5" stroke-linecap="round" filter="url(#glow)"/>
+  <line x1="33" y1="68" x2="30" y2="90" stroke="#0EA5E9" stroke-width="5.5" stroke-linecap="round" filter="url(#glow)"/>
+  <circle cx="30" cy="90" r="4.5" fill="#06B6D4" filter="url(#glow)"/>
+
+  <!-- Directional arrow -->
+  <path d="M 78 56 L 84 50 L 84 53.5 L 92 53.5 L 92 58.5 L 84 58.5 L 84 62 Z" fill="#0EA5E9" opacity="0.42"/>
+</svg>

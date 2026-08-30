@@ -1,6 +1,7 @@
 extends Node
 
-var main_scene := preload("res://Main.tscn")
+## Global autoload — model download helpers and app-wide state.
+
 var enable_download_files: bool = false
 var model_dir := "user://GDMP"
 
@@ -25,9 +26,6 @@ func _get_external_file(
 	file.store_buffer(body)
 	file.close()
 	callback.call()
-
-func go_to_main_scene() -> void:
-	get_tree().change_scene_to_packed(main_scene)
 
 func get_external_model(path: String, callback: Callable) -> HTTPRequest:
 	if enable_download_files:

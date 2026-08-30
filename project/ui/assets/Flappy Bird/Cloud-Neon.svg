@@ -1,0 +1,71 @@
+<svg width="220" height="90" viewBox="0 0 220 90" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Broad ambient halo -->
+    <filter id="halo" x="-30%" y="-60%" width="160%" height="220%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <!-- Tight neon edge glow -->
+    <filter id="edge" x="-20%" y="-40%" width="140%" height="180%">
+      <feGaussianBlur stdDeviation="3.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <!-- Sharp sparkle glow -->
+    <filter id="spark" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Ambient glow halo behind cloud — visible even at low alpha -->
+  <ellipse cx="110" cy="58" rx="86" ry="20" fill="#6D28D9" opacity="0.30" filter="url(#halo)"/>
+  <circle cx="78" cy="44" r="28" fill="#7C3AED" opacity="0.20" filter="url(#halo)"/>
+  <circle cx="114" cy="30" r="35" fill="#6D28D9" opacity="0.22" filter="url(#halo)"/>
+  <circle cx="152" cy="40" r="26" fill="#7C3AED" opacity="0.18" filter="url(#halo)"/>
+
+  <!-- Cloud body — solid dark nebula fill -->
+  <ellipse cx="110" cy="62" rx="90" ry="21" fill="#1A0A4A"/>
+  <circle cx="78" cy="47" r="28" fill="#1A0A4A"/>
+  <circle cx="114" cy="32" r="34" fill="#1A0A4A"/>
+  <circle cx="152" cy="43" r="26" fill="#1A0A4A"/>
+  <!-- Fill seams between bumps and base -->
+  <ellipse cx="96" cy="50" rx="22" ry="18" fill="#1A0A4A"/>
+  <ellipse cx="133" cy="49" rx="22" ry="18" fill="#1A0A4A"/>
+
+  <!-- Mid-tone interior — adds depth/volume -->
+  <circle cx="114" cy="34" r="22" fill="#2D1275" opacity="0.55"/>
+  <circle cx="80" cy="48" r="16" fill="#251060" opacity="0.45"/>
+  <circle cx="150" cy="44" r="14" fill="#25105C" opacity="0.40"/>
+
+  <!-- Neon outline — bottom base -->
+  <ellipse cx="110" cy="62" rx="90" ry="21" fill="none" stroke="#A855F7" stroke-width="1.8" opacity="0.85" filter="url(#edge)"/>
+  <!-- Neon outline — left bump -->
+  <circle cx="78" cy="47" r="28" fill="none" stroke="#9333EA" stroke-width="1.6" opacity="0.75" filter="url(#edge)"/>
+  <!-- Neon outline — center large bump -->
+  <circle cx="114" cy="32" r="34" fill="none" stroke="#A855F7" stroke-width="2.0" opacity="0.85" filter="url(#edge)"/>
+  <!-- Neon outline — right bump -->
+  <circle cx="152" cy="43" r="26" fill="none" stroke="#9333EA" stroke-width="1.6" opacity="0.75" filter="url(#edge)"/>
+
+  <!-- Cyan accent — peaks catch the light -->
+  <circle cx="80" cy="22" r="14" fill="none" stroke="#06B6D4" stroke-width="1.2" opacity="0.55" filter="url(#edge)"/>
+  <circle cx="114" cy="4" r="18" fill="none" stroke="#22D3EE" stroke-width="1.4" opacity="0.50" filter="url(#edge)"/>
+  <circle cx="150" cy="20" r="12" fill="none" stroke="#06B6D4" stroke-width="1.0" opacity="0.45" filter="url(#edge)"/>
+
+  <!-- Bright sparkle dots at each bump peak -->
+  <circle cx="80" cy="20" r="2.2" fill="#E9D5FF" opacity="0.90" filter="url(#spark)"/>
+  <circle cx="114" cy="2" r="3.0" fill="#C084FC" opacity="0.95" filter="url(#spark)"/>
+  <circle cx="150" cy="18" r="2.0" fill="#E9D5FF" opacity="0.85" filter="url(#spark)"/>
+
+  <!-- Small interior shimmer streaks -->
+  <ellipse cx="100" cy="42" rx="18" ry="5" fill="#4C1D95" opacity="0.40"/>
+  <ellipse cx="130" cy="50" rx="14" ry="4" fill="#3B0764" opacity="0.35"/>
+</svg>
