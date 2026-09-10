@@ -27,10 +27,15 @@ var score_label: Label = null
 var timer_label: Label = null
 var rep_label: Label = null
 var prompt_label: Label = null
+var latency_live_label: Label = null
 var elapsed_time: float = 0.0
 var is_timing: bool = false
+var _perf_update_timer: float = 0.0
 
-func _result_callback(result: MediaPipePoseLandmarkerResult, image: MediaPipeImage, _timestamp_ms: int) -> void:
+func _result_callback(result: MediaPipePoseLandmarkerResult, image: MediaPipeImage, timestamp_ms: int) -> void:
+	var duration_ms: float = Time.get_ticks_msec() - timestamp_ms
+	if duration_ms >= 0.0:
+		SessionManager.record_inference(duration_ms)
 	last_inference_ms = -1
 	show_result(image, result)
 
@@ -313,12 +318,14 @@ func _create_pose_preview() -> void:
 	dock.add_theme_stylebox_override("panel", dock_style)
 	overlay_root.add_child(dock)
 
-	var dock_center := CenterContainer.new()
-	dock_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dock_center.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	dock.add_child(dock_center)
+	var dock_hbox := HBoxContainer.new()
+	dock_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dock_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dock_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	dock_hbox.add_theme_constant_override("separation", 16)
+	dock.add_child(dock_hbox)
 
-	# Camera feed — centered, fixed width
+	# Camera feed
 	var cam_panel := PanelContainer.new()
 	cam_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var cam_style := StyleBoxFlat.new()
@@ -328,14 +335,34 @@ func _create_pose_preview() -> void:
 	cam_style.corner_radius_bottom_left = 10
 	cam_style.corner_radius_bottom_right = 10
 	cam_panel.add_theme_stylebox_override("panel", cam_style)
-	dock_center.add_child(cam_panel)
+	dock_hbox.add_child(cam_panel)
 
 	pose_preview = TextureRect.new()
 	pose_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pose_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	pose_preview.custom_minimum_size = Vector2(250, 148)
+	pose_preview.custom_minimum_size = Vector2(210, 130)
 	pose_preview.texture = ImageTexture.new()
 	cam_panel.add_child(pose_preview)
+
+	# Live performance metrics beside the camera
+	var metrics_col := VBoxContainer.new()
+	metrics_col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	metrics_col.add_theme_constant_override("separation", 8)
+	dock_hbox.add_child(metrics_col)
+
+	latency_live_label = Label.new()
+	latency_live_label.text = "--"
+	latency_live_label.add_theme_font_size_override("font_size", 28)
+	latency_live_label.add_theme_color_override("font_color", Color("#06B6D4"))
+	latency_live_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	metrics_col.add_child(latency_live_label)
+
+	var lat_caption := Label.new()
+	lat_caption.text = "RESPONSE\nTIME (MS)"
+	lat_caption.add_theme_font_size_override("font_size", 13)
+	lat_caption.add_theme_color_override("font_color", Color("#A09CC0"))
+	lat_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	metrics_col.add_child(lat_caption)
 
 	# Hidden labels — kept so signal handlers don't crash
 	timer_label = Label.new()
@@ -580,6 +607,12 @@ func _on_game_over(score: int) -> void:
 	chips_row.add_child(_make_result_chip("Reps", str(SessionManager.current_reps)))
 	inner.add_child(chips_row)
 
+	var avg_latency: float = SessionManager.get_avg_latency_ms()
+	var perf_row := HBoxContainer.new()
+	perf_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	perf_row.add_child(_make_result_chip("Response Time", "%.0f ms" % avg_latency))
+	inner.add_child(perf_row)
+
 	var btns_col := VBoxContainer.new()
 	btns_col.add_theme_constant_override("separation", 12)
 	inner.add_child(btns_col)
@@ -650,6 +683,13 @@ func _process(delta: float) -> void:
 			var mins = int(elapsed_time) / 60.0
 			var secs = int(elapsed_time) % 60
 			timer_label.text = "%02d:%02d" % [mins, secs]
+
+	_perf_update_timer += delta
+	if _perf_update_timer >= 1.0:
+		_perf_update_timer = 0.0
+		if latency_live_label:
+			latency_live_label.text = "%.0f" % SessionManager.get_avg_latency_ms()
+
 	super (delta)
 
 func _camera_frame(image: MediaPipeImage) -> void:

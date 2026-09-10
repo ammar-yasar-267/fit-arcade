@@ -9,20 +9,20 @@ var hud: CanvasLayer
 var obstacle_container: Node2D
 var cloud_container: Node2D
 
-var scroll_speed = 120.0
-var jump_velocity = -310.0
-var gravity = 350.0
+var scroll_speed = 120.0        # pixels/sec pipe movement
+var jump_velocity = -310.0      # negative = upward; applied on each arm raise rep
+var gravity = 350.0             # pixels/sec² — low enough to allow deliberate flapping
 var spawn_timer = 2.0
 var velocity_y = 0.0
 var pipe_width = 80.0
-var gap_size = 310.0
-var player_hitbox_size = 60.0
+var gap_size = 310.0            # vertical gap between top and bottom pipe in pixels
+var player_hitbox_size = 60.0   # square collision box — intentionally smaller than the sprite
 var player_visual_scale = 1.0
-var pipe_spawn_min_y = 220.0
+var pipe_spawn_min_y = 220.0    # gap centre Y range — keeps gaps reachable from any height
 var pipe_spawn_max_y = 600.0
 var pipe_spawn_min_interval = 2.8
 var pipe_spawn_max_interval = 4.0
-var has_started = false
+var has_started = false         # first arm raise rep starts the game
 var cloud_timer = 0.0
 
 func _ready():
@@ -107,7 +107,7 @@ func _process(delta):
 		if obs.position.x < -pipe_width - 40:
 			obs.queue_free()
 
-		# Score check
+		# Award a point once the player's X passes the pipe's X; meta flag prevents double-counting
 		if not obs.get_meta("scored") and obs.position.x < player.position.x:
 			obs.set_meta("scored", true)
 			add_score(1)
@@ -129,9 +129,11 @@ func on_rep_completed(_rep_count: int) -> void:
 func _spawn_pipe():
 	var gap_y = randf_range(pipe_spawn_min_y, pipe_spawn_max_y)
 
+	# Top pipe hangs down from Y=0; height = distance from top to gap opening
 	var top_pipe = _create_pipe_sprite(gap_y - gap_size / 2, false)
 	top_pipe.position = Vector2(0, 0)
 
+	# Bottom pipe rises from gap_y downward to fill the rest of the screen
 	var bottom_pipe = _create_pipe_sprite(960 - (gap_y + gap_size / 2), true)
 	bottom_pipe.position = Vector2(0, gap_y + gap_size / 2)
 

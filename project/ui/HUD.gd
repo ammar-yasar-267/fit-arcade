@@ -139,6 +139,7 @@ func _process(delta):
 		elapsed_time += delta
 		update_time(elapsed_time)
 
+
 func _exit_tree():
 	if ExerciseRecognizer.rep_completed.is_connected(_on_rep):
 		ExerciseRecognizer.rep_completed.disconnect(_on_rep)
