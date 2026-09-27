@@ -1,0 +1,76 @@
+rules_version = '2';
+
+// FitArcade data model:
+//   app_config/global   — admin-controlled switches (game modes, gameplay settings)
+//   admins/{uid}         — whitelist gating writes to app_config; seeded manually, never client-writable
+//   profiles/{uid}        — one per anonymous player identity
+//   scores/{autoId}       — full run history (one doc per completed game)
+//   best_scores/{uid}_{game_mode} — one row per player per mode, feeds the leaderboard
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isValidGameMode(mode) {
+      return mode in ['dino', 'switcher', 'flappy'];
+    }
+
+    match /app_config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /admins/{uid} {
+      // The admin web app reads its own doc to gate the dashboard UI
+      // (isAdmin() above also depends on this). Never writable from a
+      // client — that's managed manually via Firebase console / CLI.
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /profiles/{uid} {
+      allow read: if true;
+      allow create, update: if isSignedIn() && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
+    match /scores/{scoreId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.score is int
+        && request.resource.data.score >= 0
+        && request.resource.data.score <= 1000000
+        && isValidGameMode(request.resource.data.game_mode);
+      allow update, delete: if false;
+    }
+
+    match /best_scores/{docId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && docId == request.auth.uid + '_' + request.resource.data.game_mode
+        && isValidGameMode(request.resource.data.game_mode)
+        && request.resource.data.score is int
+        && request.resource.data.score >= 0
+        && request.resource.data.score <= 1000000;
+      // Only allowed to overwrite with a strictly higher score for the same player/mode.
+      allow update: if isSignedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.game_mode == resource.data.game_mode
+        && request.resource.data.score is int
+        && request.resource.data.score > resource.data.score
+        && request.resource.data.score <= 1000000;
+      allow delete: if false;
+    }
+  }
+}

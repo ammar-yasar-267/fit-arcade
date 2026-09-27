@@ -11,6 +11,9 @@ const ICON_DINO: Texture2D = preload("res://ui/assets/home/dino-jumping-jacks.sv
 const ICON_FLAPPY: Texture2D = preload("res://ui/assets/home/flappybird-arm-raises.svg")
 const ICON_LANE: Texture2D = preload("res://ui/assets/home/lane-runner-lunges.svg")
 
+var _game_cards: Dictionary = {}
+var _maintenance_block: Control
+
 func _get_game_accent(game_id: String) -> Color:
 	match game_id:
 		"dino": return Color("#F59E0B")
@@ -40,6 +43,147 @@ void fragment() {
 	_build_ui()
 	if OS.get_name() == "Android":
 		OS.request_permissions()
+	_refresh_remote_state()
+	if not Backend.has_local_profile():
+		_show_player_card_intro()
+
+	# Polling, not push — no native Firestore SDK means no persistent
+	# connection, so this is the closest to "instant" a REST-only client
+	# gets. Only runs while sitting on the home screen.
+	var poll_timer := Timer.new()
+	poll_timer.wait_time = 5.0
+	poll_timer.autostart = true
+	poll_timer.timeout.connect(_refresh_remote_state)
+	add_child(poll_timer)
+
+func _refresh_remote_state() -> void:
+	await Backend.fetch_app_config()
+	for game_id in _game_cards.keys():
+		_set_game_card_disabled(game_id, not Backend.is_game_mode_enabled(game_id))
+	_update_maintenance_block()
+
+## Disabled game modes stay visible (so players know the mode exists) but get
+## a blocking "Under Maintenance" ribbon over the card instead of being hidden.
+func _set_game_card_disabled(game_id: String, disabled: bool) -> void:
+	var card: PanelContainer = _game_cards[game_id]
+	var existing := card.get_node_or_null("MaintenanceOverlay")
+	if not disabled:
+		if existing:
+			existing.queue_free()
+		return
+	if existing:
+		return
+
+	var overlay := PanelContainer.new()
+	overlay.name = "MaintenanceOverlay"
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.0157, 0.0157, 0.0627, 0.82)
+	style.corner_radius_top_left = 20
+	style.corner_radius_top_right = 20
+	style.corner_radius_bottom_left = 20
+	style.corner_radius_bottom_right = 20
+	overlay.add_theme_stylebox_override("panel", style)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var badge := PanelContainer.new()
+	var badge_style := StyleBoxFlat.new()
+	badge_style.bg_color = Color("#EF4444", 0.18)
+	badge_style.border_width_left = 1
+	badge_style.border_width_right = 1
+	badge_style.border_width_top = 1
+	badge_style.border_width_bottom = 1
+	badge_style.border_color = Color("#EF4444", 0.5)
+	badge_style.corner_radius_top_left = 999
+	badge_style.corner_radius_top_right = 999
+	badge_style.corner_radius_bottom_left = 999
+	badge_style.corner_radius_bottom_right = 999
+	badge_style.content_margin_left = 16
+	badge_style.content_margin_right = 16
+	badge_style.content_margin_top = 8
+	badge_style.content_margin_bottom = 8
+	badge.add_theme_stylebox_override("panel", badge_style)
+	center.add_child(badge)
+
+	var badge_label := Label.new()
+	badge_label.text = "🔧 Under Maintenance"
+	badge_label.add_theme_font_size_override("font_size", 16)
+	badge_label.add_theme_color_override("font_color", Color("#EF4444"))
+	badge.add_child(badge_label)
+
+	card.add_child(overlay)
+
+## Maintenance mode is a hard lock, not a hint: a full-screen, non-dismissable
+## overlay that sits on top of everything (game cards, the leaderboard button,
+## even an in-progress Player Card claim) and swallows all input, so nothing
+## on the home screen is reachable while it's active.
+func _update_maintenance_block() -> void:
+	if not Backend.is_maintenance_mode():
+		if _maintenance_block:
+			_maintenance_block.queue_free()
+			_maintenance_block = null
+		return
+	if _maintenance_block:
+		return
+
+	var overlay := ColorRect.new()
+	overlay.color = Color(0.0157, 0.0157, 0.0627, 0.97)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(340, 0)
+	var pstyle := StyleBoxFlat.new()
+	pstyle.bg_color = CARD_SURFACE
+	pstyle.border_width_top = 4
+	pstyle.border_color = Color("#EF4444")
+	pstyle.corner_radius_top_left = 28
+	pstyle.corner_radius_top_right = 28
+	pstyle.corner_radius_bottom_left = 28
+	pstyle.corner_radius_bottom_right = 28
+	pstyle.content_margin_left = 32
+	pstyle.content_margin_right = 32
+	pstyle.content_margin_top = 32
+	pstyle.content_margin_bottom = 32
+	panel.add_theme_stylebox_override("panel", pstyle)
+	center.add_child(panel)
+
+	var inner := VBoxContainer.new()
+	inner.alignment = BoxContainer.ALIGNMENT_CENTER
+	inner.add_theme_constant_override("separation", 14)
+	panel.add_child(inner)
+
+	var icon := Label.new()
+	icon.text = "🚧"
+	icon.add_theme_font_size_override("font_size", 56)
+	icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	inner.add_child(icon)
+
+	var title := Label.new()
+	title.text = "Under Maintenance"
+	title.add_theme_font_size_override("font_size", 26)
+	title.add_theme_color_override("font_color", Color("#EF4444"))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	inner.add_child(title)
+
+	var subtitle := Label.new()
+	subtitle.text = "FitArcade is temporarily unavailable. Please check back soon."
+	subtitle.add_theme_font_size_override("font_size", 15)
+	subtitle.add_theme_color_override("font_color", TEXT_SECONDARY)
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	inner.add_child(subtitle)
+
+	_maintenance_block = overlay
+	add_child(overlay)
 
 func _build_ui() -> void:
 	var margin = MarginContainer.new()
@@ -92,6 +236,17 @@ func _build_ui() -> void:
 	var footer_spacer = Control.new()
 	footer_spacer.custom_minimum_size = Vector2(0, 32)
 	games_vbox.add_child(footer_spacer)
+
+	var leaderboard_btn := Button.new()
+	leaderboard_btn.text = "🏆  Leaderboards"
+	leaderboard_btn.add_theme_font_size_override("font_size", 18)
+	leaderboard_btn.custom_minimum_size = Vector2(0, 52)
+	leaderboard_btn.flat = true
+	leaderboard_btn.add_theme_color_override("font_color", BRAND_CYAN)
+	leaderboard_btn.pressed.connect(func():
+		get_tree().change_scene_to_file("res://ui/LeaderboardScreen.tscn")
+	)
+	vbox.add_child(leaderboard_btn)
 
 func _create_game_card(parent: Control, game_name: String, exercise_name: String, game_id: String) -> void:
 	var accent = _get_game_accent(game_id)
@@ -252,7 +407,135 @@ func _create_game_card(parent: Control, game_name: String, exercise_name: String
 	)
 
 	parent.add_child(card)
+	_game_cards[game_id] = card
 
 func _on_game_selected(game_id: String) -> void:
 	GameManager.selected_game_name = game_id
 	get_tree().change_scene_to_file("res://ui/CalibrationScreen.tscn")
+
+func _show_player_card_intro() -> void:
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.82)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(overlay)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(380, 0)
+	var pstyle := StyleBoxFlat.new()
+	pstyle.bg_color = CARD_SURFACE
+	pstyle.border_width_top = 4
+	pstyle.border_color = BRAND_CYAN
+	pstyle.corner_radius_top_left = 28
+	pstyle.corner_radius_top_right = 28
+	pstyle.corner_radius_bottom_left = 28
+	pstyle.corner_radius_bottom_right = 28
+	pstyle.content_margin_left = 32
+	pstyle.content_margin_right = 32
+	pstyle.content_margin_top = 32
+	pstyle.content_margin_bottom = 32
+	pstyle.shadow_color = Color(0, 0, 0, 0.5)
+	pstyle.shadow_size = 24
+	panel.add_theme_stylebox_override("panel", pstyle)
+	center.add_child(panel)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 18)
+	panel.add_child(inner)
+
+	var title := Label.new()
+	title.text = "Claim Your Player Card"
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", BRAND_CYAN)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	inner.add_child(title)
+
+	var subtitle := Label.new()
+	subtitle.text = "Pick a name — we'll hand you a badge and a number for the leaderboard."
+	subtitle.add_theme_font_size_override("font_size", 16)
+	subtitle.add_theme_color_override("font_color", TEXT_SECONDARY)
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	inner.add_child(subtitle)
+
+	var name_input := LineEdit.new()
+	name_input.placeholder_text = "Your name"
+	name_input.max_length = 20
+	inner.add_child(name_input)
+
+	var status_label := Label.new()
+	status_label.text = ""
+	status_label.add_theme_font_size_override("font_size", 14)
+	status_label.add_theme_color_override("font_color", Color("#EF4444"))
+	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	inner.add_child(status_label)
+
+	var claim_btn := Button.new()
+	claim_btn.text = "Claim Card"
+	claim_btn.add_theme_font_size_override("font_size", 20)
+	claim_btn.custom_minimum_size = Vector2(0, 52)
+	var claim_style := StyleBoxFlat.new()
+	claim_style.bg_color = BRAND_CYAN
+	claim_style.corner_radius_top_left = 14
+	claim_style.corner_radius_top_right = 14
+	claim_style.corner_radius_bottom_left = 14
+	claim_style.corner_radius_bottom_right = 14
+	claim_btn.add_theme_stylebox_override("normal", claim_style)
+	claim_btn.add_theme_color_override("font_color", Color("#04101A"))
+	inner.add_child(claim_btn)
+
+	var skip_btn := Button.new()
+	skip_btn.text = "Skip for now"
+	skip_btn.flat = true
+	skip_btn.add_theme_color_override("font_color", TEXT_SECONDARY)
+	inner.add_child(skip_btn)
+
+	skip_btn.pressed.connect(func(): overlay.queue_free())
+
+	claim_btn.pressed.connect(func():
+		var chosen_name := name_input.text.strip_edges()
+		if chosen_name == "":
+			status_label.text = "Enter a name first."
+			return
+		status_label.text = ""
+		claim_btn.disabled = true
+		claim_btn.text = "Claiming…"
+		var result := await Backend.ensure_profile(chosen_name)
+		if result.get("display_name", "") == "":
+			claim_btn.disabled = false
+			claim_btn.text = "Claim Card"
+			status_label.text = "Couldn't reach the server — check your connection and try again."
+			return
+		for child in inner.get_children():
+			child.queue_free()
+		var badge := Label.new()
+		badge.text = result.get("badge", "🎮")
+		badge.add_theme_font_size_override("font_size", 64)
+		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		inner.add_child(badge)
+		var reveal_name := Label.new()
+		reveal_name.text = "%s #%s" % [result.get("display_name", ""), result.get("tag_number", "")]
+		reveal_name.add_theme_font_size_override("font_size", 26)
+		reveal_name.add_theme_color_override("font_color", TEXT_PRIMARY)
+		reveal_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		inner.add_child(reveal_name)
+		var reveal_sub := Label.new()
+		reveal_sub.text = "Your card is ready. Good luck out there."
+		reveal_sub.add_theme_font_size_override("font_size", 15)
+		reveal_sub.add_theme_color_override("font_color", TEXT_SECONDARY)
+		reveal_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		inner.add_child(reveal_sub)
+		var go_btn := Button.new()
+		go_btn.text = "Let's Go"
+		go_btn.add_theme_font_size_override("font_size", 20)
+		go_btn.custom_minimum_size = Vector2(0, 52)
+		go_btn.add_theme_stylebox_override("normal", claim_style)
+		go_btn.add_theme_color_override("font_color", Color("#04101A"))
+		go_btn.pressed.connect(func(): overlay.queue_free())
+		inner.add_child(go_btn)
+	)

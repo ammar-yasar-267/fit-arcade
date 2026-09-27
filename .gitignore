@@ -1,3 +1,13 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Admin web app (Next.js)
+admin/node_modules/
+admin/.next/
+admin/out/
+
+# Firebase CLI
+firebase-debug.log
+.firebase/
+

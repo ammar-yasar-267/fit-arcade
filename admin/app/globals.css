@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+:root {
+  --void: #040410;
+  --surface: #1a1640;
+  --surface-raised: #211c4d;
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --text-primary: #ffffff;
+  --text-secondary: #a09cc0;
+  --cyan: #06b6d4;
+  --cyan-hover: #0891b2;
+  --green: #22c55e;
+  --red: #ef4444;
+  --amber: #f59e0b;
+  --yellow: #fccb15;
+}
+
+@theme inline {
+  --color-void: var(--void);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-border-soft: var(--border-soft);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-cyan: var(--cyan);
+  --color-cyan-hover: var(--cyan-hover);
+  --color-green: var(--green);
+  --color-red: var(--red);
+  --color-amber: var(--amber);
+  --color-yellow: var(--yellow);
+  --font-display: var(--font-space-grotesk);
+  --font-sans: var(--font-dm-sans);
+}
+
+body {
+  background: radial-gradient(circle at 50% 0%, #0f0b29 0%, var(--void) 55%);
+  color: var(--text-primary);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display), system-ui, sans-serif;
+}
+
+::selection {
+  background: var(--cyan);
+  color: #04101a;
+}
+
+input:focus, textarea:focus {
+  outline: none;
+}
+
+/* Slim, dark-friendly scrollbar so long lists don't clash with the theme */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--surface-raised);
+  border-radius: 999px;
+}

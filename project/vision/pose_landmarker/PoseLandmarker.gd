@@ -546,7 +546,7 @@ func _get_state_name(state: int) -> String:
 		ExerciseRecognizer.State.REP_COUNTED: return "REP!"
 		_: return "?"
 
-func _on_game_over(score: int) -> void:
+func _on_game_over(score: int, reps: int = 0) -> void:
 	# If the game ended while paused, restore the exercise so Play Again works
 	if _paused_exercise != null:
 		ExerciseRecognizer.current_exercise = _paused_exercise
@@ -613,6 +613,14 @@ func _on_game_over(score: int) -> void:
 	perf_row.add_child(_make_result_chip("Response Time", "%.0f ms" % avg_latency))
 	inner.add_child(perf_row)
 
+	var leaderboard_status := Label.new()
+	leaderboard_status.text = "Saving to leaderboard…"
+	leaderboard_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	leaderboard_status.add_theme_font_size_override("font_size", 16)
+	leaderboard_status.add_theme_color_override("font_color", Color("#A09CC0"))
+	inner.add_child(leaderboard_status)
+	_submit_score_and_update_label(GameManager.selected_game_name, score, reps, leaderboard_status)
+
 	var btns_col := VBoxContainer.new()
 	btns_col.add_theme_constant_override("separation", 12)
 	inner.add_child(btns_col)
@@ -635,6 +643,17 @@ func _on_game_over(score: int) -> void:
 		pose_canvas.add_child(overlay)
 	else:
 		add_child(overlay)
+
+func _submit_score_and_update_label(game_mode: String, score: int, reps: int, label: Label) -> void:
+	var ok := await Backend.submit_score(game_mode, score, reps)
+	if not is_instance_valid(label):
+		return
+	if ok:
+		label.text = "Saved to leaderboard"
+		label.add_theme_color_override("font_color", Color("#22C55E"))
+	else:
+		label.text = "Couldn't save — check your connection"
+		label.add_theme_color_override("font_color", Color("#EF4444"))
 
 func _make_result_chip(label_text: String, value_text: String) -> PanelContainer:
 	var chip := PanelContainer.new()

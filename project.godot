@@ -12,7 +12,7 @@ config_version=5
 
 config/name="FitArcade"
 run/main_scene="uid://bsplnu074uol0"
-config/features=PackedStringArray("4.6", "Mobile")
+config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
 
 [autoload]

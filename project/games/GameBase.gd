@@ -5,7 +5,10 @@ extends Node2D
 ## translates them to in-game actions.
 ## Subclasses override the signal handler methods.
 
-signal game_over(score: int)
+## reps is captured here (rather than read later from SessionManager) since
+## HUD.gd's own game_over handler resets SessionManager.current_reps to 0,
+## and Godot doesn't guarantee this handler runs before that one.
+signal game_over(score: int, reps: int)
 signal score_changed(score: int)
 
 var game_name: String = "Base Game"
@@ -20,7 +23,7 @@ func start_game() -> void:
 
 func end_game() -> void:
 	is_running = false
-	game_over.emit(score)
+	game_over.emit(score, SessionManager.current_reps)
 
 func add_score(points: int) -> void:
 	score += points

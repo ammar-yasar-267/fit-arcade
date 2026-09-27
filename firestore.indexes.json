@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "best_scores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "game_mode", "order": "ASCENDING" },
+        { "fieldPath": "score", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "scores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
