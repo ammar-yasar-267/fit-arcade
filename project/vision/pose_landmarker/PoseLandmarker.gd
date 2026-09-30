@@ -5,9 +5,10 @@ extends VisionTask
 ## Loads and displays the selected game alongside the camera.
 ## Shows a PIP camera preview with rendered pose skeleton overlay.
 
-var task: MediaPipePoseLandmarker
-var task_file := "pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
+var graph: MoveNetGraph
+var task_file := "pose_landmarker/movenet_lightning/movenet_singlepose_lightning_f16.tflite"
 var renderer: MediaPipePoseRenderer
+var _last_camera_image: MediaPipeImage = null
 var game_instance: GameBase = null
 var game_canvas: CanvasLayer = null
 var pose_preview: TextureRect = null
@@ -32,12 +33,42 @@ var elapsed_time: float = 0.0
 var is_timing: bool = false
 var _perf_update_timer: float = 0.0
 
-func _result_callback(result: MediaPipePoseLandmarkerResult, image: MediaPipeImage, timestamp_ms: int) -> void:
-	var duration_ms: float = Time.get_ticks_msec() - timestamp_ms
-	if duration_ms >= 0.0:
-		SessionManager.record_inference(duration_ms)
+func _on_graph_packets(packets: Dictionary) -> void:
+	if last_inference_ms >= 0:
+		var duration_ms: float = Time.get_ticks_msec() - last_inference_ms
+		if duration_ms >= 0.0:
+			SessionManager.record_inference(duration_ms)
 	last_inference_ms = -1
-	show_result(image, result)
+	if not packets.has("pose_landmarks") or _last_camera_image == null:
+		show_result(_last_camera_image, null)
+		return
+	var packet: MediaPipePacket = packets["pose_landmarks"]
+	var raw := packet.get() as MediaPipeNormalizedLandmarks
+	show_result(_last_camera_image, _fix_landmark_order(raw) if raw != null else null)
+
+## MoveNet's raw output tensor is laid out per-keypoint as (y, x, score), but
+## TensorsToLandmarksCalculator decodes it positionally as (x, y, z) — so the
+## landmarks coming out of the graph have x/y swapped and confidence sitting in z.
+## MediaPipeNormalizedLandmark has no GDScript setters, so the fix has to go through
+## a fresh NormalizedLandmarkList proto rather than mutating the existing object.
+func _fix_landmark_order(raw: MediaPipeNormalizedLandmarks) -> MediaPipeNormalizedLandmarks:
+	# set_repeated_field() only sets an *existing* index — it doesn't grow the list —
+	# so building a fresh 17-element NormalizedLandmarkList has to go through raw
+	# protobuf bytes (see MoveNetGraph._append_float_field/_append_message_field),
+	# the same way the calculator options did.
+	var raw_points := raw.get_landmarks()
+	var buffer := PackedByteArray()
+	for pt in raw_points:
+		var lm_bytes := PackedByteArray()
+		MoveNetGraph._append_float_field(lm_bytes, 1, pt.y) # x <- MoveNet's y
+		MoveNetGraph._append_float_field(lm_bytes, 2, pt.x) # y <- MoveNet's x
+		MoveNetGraph._append_float_field(lm_bytes, 4, pt.z) # visibility <- MoveNet's score
+		MoveNetGraph._append_message_field(buffer, 1, lm_bytes) # field 1 = repeated NormalizedLandmark landmark
+	var list_proto := MediaPipeProto.new()
+	list_proto.initialize("mediapipe.NormalizedLandmarkList")
+	if not buffer.is_empty():
+		list_proto.parse_from_buffer(buffer)
+	return list_proto.get_packet().get() as MediaPipeNormalizedLandmarks
 
 func _ready() -> void:
 	super ()
@@ -89,15 +120,32 @@ func _init_task():
 	var file := get_external_model(task_file)
 	if file == null:
 		return
-	var base_options := MediaPipeTaskBaseOptions.new()
-	base_options.delegate = delegate
-	base_options.model_asset_buffer = file.get_buffer(file.get_length())
-	task = MediaPipePoseLandmarker.new()
-	task.initialize(base_options, running_mode)
-	task.result_callback.connect(self._result_callback)
+	var bytes := file.get_buffer(file.get_length())
+	var model_path := _ensure_model_on_disk(bytes)
+	graph = MoveNetGraph.new(model_path)
+	graph.packets_callback.connect(self._on_graph_packets)
+	graph.error.connect(func(msg): push_error("MoveNet graph error: ", msg))
 	renderer = MediaPipePoseRenderer.new()
 	last_inference_ms = -1
 	super ()
+
+## InferenceCalculator needs a real filesystem path (not a res:// pck entry), so
+## the bundled model is copied to user:// once and referenced by its absolute path.
+## Re-checks size on every launch rather than trusting "file exists" — an earlier
+## crashy/interrupted run could otherwise leave a truncated copy cached forever,
+## silently feeding InferenceCalculator garbage on every later run.
+func _ensure_model_on_disk(bytes: PackedByteArray) -> String:
+	var dir := "user://movenet"
+	DirAccess.make_dir_recursive_absolute(dir)
+	var path := dir.path_join("movenet_singlepose_lightning_f16.tflite")
+	var needs_write := true
+	if FileAccess.file_exists(path):
+		needs_write = FileAccess.get_size(path) != bytes.size()
+	if needs_write:
+		var f := FileAccess.open(path, FileAccess.WRITE)
+		f.store_buffer(bytes)
+		f.close()
+	return ProjectSettings.globalize_path(path)
 
 ## Override _select_camera to auto-select first available camera
 ## instead of showing the dialog (which is hidden behind the game).
@@ -726,19 +774,31 @@ func _camera_frame(image: MediaPipeImage) -> void:
 	super (image)
 
 func _process_camera(image: MediaPipeImage, timestamp_ms: int) -> void:
-	if task:
+	if graph:
 		var now := Time.get_ticks_msec()
 		# Skip if a previous inference is still in flight (within timeout window).
 		if last_inference_ms >= 0 and now - last_inference_ms < Settings.inference_timeout_ms:
 			return
 		last_inference_ms = now
-		task.detect_async(image, timestamp_ms)
+		_last_camera_image = image
+		# PoseRenderer.gd's proven-working pattern uses get_image_frame_packet()
+		# (mediapipe::ImageFrame), not get_packet() (mediapipe::Image) — switching
+		# to match it, since all-17-points-collapsed-to-one-value output suggests
+		# the graph was receiving degenerate/blank image data via the Image path.
+		var packet := image.get_image_frame_packet()
+		packet.timestamp = timestamp_ms * 1000
+		graph.send({"input_image": packet})
 
-func show_result(image: MediaPipeImage, result: MediaPipePoseLandmarkerResult) -> void:
+func show_result(image: MediaPipeImage, landmarks: MediaPipeNormalizedLandmarks) -> void:
+	if image == null:
+		return
 	var render_source := _get_preview_render_source(image)
-	var output_image := renderer.render(render_source, result.pose_landmarks)
+	var multi_landmarks: Array[MediaPipeNormalizedLandmarks] = []
+	if landmarks != null:
+		multi_landmarks.append(landmarks)
+	var output_image := renderer.render(render_source, multi_landmarks)
 	var img := output_image.image
-	
+
 	# Update full-screen camera view (if visible) -> VisionTask method handles the thread safety
 	if image_view and image_view.visible:
 		update_image(img)
@@ -754,8 +814,8 @@ func show_result(image: MediaPipeImage, result: MediaPipePoseLandmarkerResult) -
 			else:
 				tex.call_deferred("set_image", img)
 	# Forward landmarks to exercise recognition system
-	if result.pose_landmarks.size() > 0:
-		ExerciseRecognizer.process_pose(result.pose_landmarks[0])
+	if landmarks != null:
+		ExerciseRecognizer.process_pose(landmarks)
 
 func _get_preview_render_source(image: MediaPipeImage) -> MediaPipeImage:
 	return image

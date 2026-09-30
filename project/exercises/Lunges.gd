@@ -18,12 +18,14 @@ const HOLD_REQUIRED := 3    # ~150ms at 20fps — user's lunges are shallow and 
 const DROPOUT_ALLOWED := 1  # tight: we don't want stale counts carrying over
 
 func process_frame(landmarks: MediaPipeNormalizedLandmarks, current_state: ExerciseRecognizer.State) -> ExerciseRecognizer.State:
-	var l_hip   = get_landmark_pos(landmarks, 23)
-	var r_hip   = get_landmark_pos(landmarks, 24)
-	var l_knee  = get_landmark_pos(landmarks, 25)
-	var r_knee  = get_landmark_pos(landmarks, 26)
-	var l_ankle = get_landmark_pos(landmarks, 27)
-	var r_ankle = get_landmark_pos(landmarks, 28)
+	var l_hip   = get_landmark_pos(landmarks, PoseKeypoints.LEFT_HIP)
+	var r_hip   = get_landmark_pos(landmarks, PoseKeypoints.RIGHT_HIP)
+	var l_knee  = get_landmark_pos(landmarks, PoseKeypoints.LEFT_KNEE)
+	var r_knee  = get_landmark_pos(landmarks, PoseKeypoints.RIGHT_KNEE)
+	var l_ankle = get_landmark_pos(landmarks, PoseKeypoints.LEFT_ANKLE)
+	var r_ankle = get_landmark_pos(landmarks, PoseKeypoints.RIGHT_ANKLE)
+
+	frame_counter += 1
 
 	if l_hip == Vector3.ZERO or r_hip == Vector3.ZERO:
 		return current_state
@@ -38,16 +40,17 @@ func process_frame(landmarks: MediaPipeNormalizedLandmarks, current_state: Exerc
 	var min_angle  = min(l_angle, r_angle)
 	var asymmetry  = abs(l_angle - r_angle)
 
-	frame_counter += 1
 	if frame_counter % 15 == 0:
 		print("Lunge | L=%.1f° R=%.1f° asym=%.1f° hold=%d drop=%d | %s" % [l_angle, r_angle, asymmetry, hold_count, dropout_count, str(current_state)])
 
 	# Standing:   both knees straight, min_angle > 155°
-	# Lunge:      one knee clearly bent (< 140°) AND asymmetric (> 20°)
+	# Lunge:      one knee clearly bent (< 150°) AND asymmetric (> 15°)
 	#             Asymmetry rejects squats/sitting where both knees bend together.
-	#             140° threshold based on observed data: user's lunges reach 126-140°.
+	#             Retuned looser than the original 140°/20° (tuned pre-MoveNet-
+	#             migration) after live data showed several real lunge attempts
+	#             landing just short, e.g. min_angle=140.1° and asymmetry=19.5°.
 	var is_start   = min_angle > 155.0
-	var is_lunging = min_angle < 140.0 and asymmetry > 20.0
+	var is_lunging = min_angle < 150.0 and asymmetry > 15.0
 
 	if is_lunging:
 		hold_count += 1

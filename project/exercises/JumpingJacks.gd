@@ -6,17 +6,17 @@ func _init():
 var frame_counter = 0
 
 func process_frame(landmarks: MediaPipeNormalizedLandmarks, current_state: ExerciseRecognizer.State) -> ExerciseRecognizer.State:
-	var l_hip = get_landmark_pos(landmarks, 23)
-	var r_hip = get_landmark_pos(landmarks, 24)
-	var l_shoulder = get_landmark_pos(landmarks, 11)
-	var r_shoulder = get_landmark_pos(landmarks, 12)
-	var l_wrist = get_landmark_pos(landmarks, 15)
-	var r_wrist = get_landmark_pos(landmarks, 16)
-	var l_ankle = get_landmark_pos(landmarks, 27)
-	var r_ankle = get_landmark_pos(landmarks, 28)
-	
-	var l_knee = get_landmark_pos(landmarks, 25)
-	var r_knee = get_landmark_pos(landmarks, 26)
+	var l_hip = get_landmark_pos(landmarks, PoseKeypoints.LEFT_HIP)
+	var r_hip = get_landmark_pos(landmarks, PoseKeypoints.RIGHT_HIP)
+	var l_shoulder = get_landmark_pos(landmarks, PoseKeypoints.LEFT_SHOULDER)
+	var r_shoulder = get_landmark_pos(landmarks, PoseKeypoints.RIGHT_SHOULDER)
+	var l_wrist = get_landmark_pos(landmarks, PoseKeypoints.LEFT_WRIST)
+	var r_wrist = get_landmark_pos(landmarks, PoseKeypoints.RIGHT_WRIST)
+	var l_ankle = get_landmark_pos(landmarks, PoseKeypoints.LEFT_ANKLE)
+	var r_ankle = get_landmark_pos(landmarks, PoseKeypoints.RIGHT_ANKLE)
+
+	var l_knee = get_landmark_pos(landmarks, PoseKeypoints.LEFT_KNEE)
+	var r_knee = get_landmark_pos(landmarks, PoseKeypoints.RIGHT_KNEE)
 
 	if (l_ankle == Vector3.ZERO or r_ankle == Vector3.ZERO) and (l_knee == Vector3.ZERO or r_knee == Vector3.ZERO):
 		return current_state

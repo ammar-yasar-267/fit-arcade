@@ -9,8 +9,11 @@ var frame_interval_ms: int = 0
 var infer_max_dim: int = 280
 
 # Rep detection thresholds
+# end_min retuned down from 130.0 (needed exaggerated overhead reach on a phone
+# camera's framing/distance vs. the laptop it was originally tuned against — a
+# fixed global angle threshold doesn't transfer cleanly across camera setups).
 var arm_raise_start_max: float = 48.0
-var arm_raise_end_min: float = 130.0
+var arm_raise_end_min: float = 110.0
 
 const SETTINGS_FILE := "user://fitarcade_settings.cfg"
 const DEFAULTS := {
@@ -19,7 +22,7 @@ const DEFAULTS := {
 	"frame_interval_ms": 0,
 	"infer_max_dim": 280,
 	"arm_raise_start_max": 48.0,
-	"arm_raise_end_min": 130.0,
+	"arm_raise_end_min": 110.0,
 }
 
 func _ready() -> void:

@@ -6,20 +6,17 @@ extends ExerciseBase
 ## Start: arms at sides (angle < 30°)
 ## End: arms raised overhead (angle > 150°)
 ##
-## MediaPipe Pose landmark indices:
-##   Left:  hip=23, shoulder=11, wrist=15
-##   Right: hip=24, shoulder=12, wrist=16
+## Uses COCO-17 keypoint indices (see PoseKeypoints).
 ## We use the LEFT side by default; could average both for robustness.
 
-## Landmark indices: hip(23) - shoulder(11) - wrist(15)
-const HIP_INDEX := 23
-const SHOULDER_INDEX := 11
-const WRIST_INDEX := 15
+const HIP_INDEX := PoseKeypoints.LEFT_HIP
+const SHOULDER_INDEX := PoseKeypoints.LEFT_SHOULDER
+const WRIST_INDEX := PoseKeypoints.LEFT_WRIST
 
 ## Right side for averaging
-const R_HIP_INDEX := 24
-const R_SHOULDER_INDEX := 12
-const R_WRIST_INDEX := 16
+const R_HIP_INDEX := PoseKeypoints.RIGHT_HIP
+const R_SHOULDER_INDEX := PoseKeypoints.RIGHT_SHOULDER
+const R_WRIST_INDEX := PoseKeypoints.RIGHT_WRIST
 
 func _init() -> void:
 	exercise_name = "Arm Raises"
@@ -34,11 +31,15 @@ func process_frame(landmarks: MediaPipeNormalizedLandmarks, current_state: Exerc
 	var l_hip = get_landmark_pos(landmarks, HIP_INDEX)
 	var l_shoulder = get_landmark_pos(landmarks, SHOULDER_INDEX)
 	var l_wrist = get_landmark_pos(landmarks, WRIST_INDEX)
-	var left_angle = calculate_angle(l_hip, l_shoulder, l_wrist)
-
 	var r_hip = get_landmark_pos(landmarks, R_HIP_INDEX)
 	var r_shoulder = get_landmark_pos(landmarks, R_SHOULDER_INDEX)
 	var r_wrist = get_landmark_pos(landmarks, R_WRIST_INDEX)
+
+	if l_hip == Vector3.ZERO or l_shoulder == Vector3.ZERO or l_wrist == Vector3.ZERO \
+			or r_hip == Vector3.ZERO or r_shoulder == Vector3.ZERO or r_wrist == Vector3.ZERO:
+		return current_state
+
+	var left_angle = calculate_angle(l_hip, l_shoulder, l_wrist)
 	var right_angle = calculate_angle(r_hip, r_shoulder, r_wrist)
 
 	var max_angle = max(left_angle, right_angle)

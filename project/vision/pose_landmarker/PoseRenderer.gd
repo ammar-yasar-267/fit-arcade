@@ -1,53 +1,35 @@
 class_name MediaPipePoseRenderer
 extends MediaPipeLandmarksRenderer
 
+## COCO-17 skeleton edges (as output by MoveNet). See PoseKeypoints for index names.
 static var POSE_CONNECTIONS: PackedInt32Array = [
-	0, 1, 1, 2, 2, 3, 3, 7,
-	0, 4, 4, 5, 5, 6, 6, 8,
-	9, 10, 11, 12,
-	11, 13, 13, 15, 15, 17,
-	15, 19, 15, 21, 17, 19,
-	12, 14, 14, 16, 16, 18,
-	16, 20, 16, 22, 18, 20,
-	11, 23, 12, 24, 23, 24,
-	23, 25, 24, 26,
-	25, 27, 26, 28,
-	27, 29, 28, 30,
-	29, 31, 30, 32,
-	27, 31, 28, 32,
+	0, 1, 0, 2, 1, 3, 2, 4,
+	0, 5, 0, 6, 5, 6,
+	5, 7, 7, 9, 6, 8, 8, 10,
+	5, 11, 6, 12, 11, 12,
+	11, 13, 13, 15, 12, 14, 14, 16,
 ]
 
+## Odd COCO indices are left-side keypoints, even (non-zero) are right-side.
+## Each pair is a single-element [begin, end) range picking out one keypoint.
 var SPLIT_LEFT := [
-	[1, 4],
-	[7, 8],
-	[9, 10],
-	[11, 12],
-	[13, 14],
-	[15, 16],
-	[17, 18],
-	[19, 20],
-	[21, 22],
-	[23, 24]
+	[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16]
 ]
 
 var SPLIT_RIGHT := [
-	[4, 7],
-	[8, 9],
-	[10, 11],
-	[12, 13],
-	[14, 15],
-	[16, 17],
-	[18, 19],
-	[20, 21],
-	[22, 23],
-	[24, 25]
+	[2, 3], [4, 5], [6, 7], [8, 9], [10, 11], [12, 13], [14, 15], [16, 17]
 ]
+
+## MoveNet's confidence scores read on a different scale than BlazePose's did —
+## real detections cluster ~0.6-0.95 for upper body, phantom/no-person "guesses"
+## top out around ~0.3, so 0.3 is the cutoff that separates them (measured live).
+const VISIBILITY_THRESHOLD := 0.3
 
 static func pose_landmarks_to_render_data(builder: MediaPipeGraphBuilder) -> MediaPipeGraphNode:
 	return landmarks_to_render_data(
 		builder, POSE_CONNECTIONS,
 		Color.WHITE, Color.WHITE,
-		3.0, false, true, 0.5,
+		3.0, false, true, VISIBILITY_THRESHOLD,
 	)
 
 static func split_landmarks(builder: MediaPipeGraphBuilder, splits: Array) -> MediaPipeGraphNode:
@@ -70,14 +52,14 @@ static func left_landmarks_to_render_data(builder: MediaPipeGraphBuilder) -> Med
 	return landmarks_to_render_data(
 		builder, [],
 		Color.from_rgba8(255, 138, 0), Color.from_rgba8(255, 138, 0),
-		3.0, false, true, 0.5
+		3.0, false, true, VISIBILITY_THRESHOLD
 	)
 
 static func right_landmarks_to_render_data(builder: MediaPipeGraphBuilder) -> MediaPipeGraphNode:
 	return landmarks_to_render_data(
 		builder, [],
 		Color.from_rgba8(0, 217, 231), Color.from_rgba8(0, 217, 231),
-		3.0, false, true, 0.5
+		3.0, false, true, VISIBILITY_THRESHOLD
 	)
 
 func _init() -> void:

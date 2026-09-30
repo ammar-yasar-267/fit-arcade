@@ -17,7 +17,7 @@ func analyze_calibration_pose(pose_landmarks) -> Dictionary:
 		return result
 
 	var landmarks = pose_landmarks.get_landmarks()
-	if landmarks.size() < 33:
+	if landmarks.size() < PoseKeypoints.NUM_KEYPOINTS:
 		result.message = "Pose not fully detected"
 		result.detail = "Keep your full body in frame until all key points are visible."
 		return result
@@ -29,33 +29,33 @@ func analyze_calibration_pose(pose_landmarks) -> Dictionary:
 
 	# Default: require head + wrists + ankles (full-body)
 	key_points = [
-		{"idx": 0, "name": "your head", "hint": "Lift your chin into frame"},
-		{"idx": 15, "name": "your left wrist", "hint": "Raise your left arm into view"},
-		{"idx": 16, "name": "your right wrist", "hint": "Raise your right arm into view"},
-		{"idx": 27, "name": "your left ankle", "hint": "Step back so your left foot is visible"},
-		{"idx": 28, "name": "your right ankle", "hint": "Step back so your right foot is visible"},
+		{"idx": PoseKeypoints.NOSE, "name": "your head", "hint": "Lift your chin into frame"},
+		{"idx": PoseKeypoints.LEFT_WRIST, "name": "your left wrist", "hint": "Raise your left arm into view"},
+		{"idx": PoseKeypoints.RIGHT_WRIST, "name": "your right wrist", "hint": "Raise your right arm into view"},
+		{"idx": PoseKeypoints.LEFT_ANKLE, "name": "your left ankle", "hint": "Step back so your left foot is visible"},
+		{"idx": PoseKeypoints.RIGHT_ANKLE, "name": "your right ankle", "hint": "Step back so your right foot is visible"},
 	]
 
 	if game == "flappy":
 		# Flappy only needs the arms (wrists) and head for orientation
 		key_points = [
-			{"idx": 0, "name": "your head", "hint": "Keep your head visible"},
-			{"idx": 15, "name": "your left wrist", "hint": "Raise your left arm into view"},
-			{"idx": 16, "name": "your right wrist", "hint": "Raise your right arm into view"},
+			{"idx": PoseKeypoints.NOSE, "name": "your head", "hint": "Keep your head visible"},
+			{"idx": PoseKeypoints.LEFT_WRIST, "name": "your left wrist", "hint": "Raise your left arm into view"},
+			{"idx": PoseKeypoints.RIGHT_WRIST, "name": "your right wrist", "hint": "Raise your right arm into view"},
 		]
 	elif game == "dino":
 		# Dino (jumping) needs feet and maybe head
 		key_points = [
-			{"idx": 0, "name": "your head", "hint": "Keep your head visible"},
-			{"idx": 27, "name": "your left ankle", "hint": "Step back so your left foot is visible"},
-			{"idx": 28, "name": "your right ankle", "hint": "Step back so your right foot is visible"},
+			{"idx": PoseKeypoints.NOSE, "name": "your head", "hint": "Keep your head visible"},
+			{"idx": PoseKeypoints.LEFT_ANKLE, "name": "your left ankle", "hint": "Step back so your left foot is visible"},
+			{"idx": PoseKeypoints.RIGHT_ANKLE, "name": "your right ankle", "hint": "Step back so your right foot is visible"},
 		]
 	elif game == "switcher":
 		# Switcher (lunges) now only needs knees instead of ankles
 		key_points = [
-			{"idx": 0, "name": "your head", "hint": "Keep your head visible"},
-			{"idx": 25, "name": "your left knee", "hint": "Step back so your knees are visible"},
-			{"idx": 26, "name": "your right knee", "hint": "Step back so your knees are visible"},
+			{"idx": PoseKeypoints.NOSE, "name": "your head", "hint": "Keep your head visible"},
+			{"idx": PoseKeypoints.LEFT_KNEE, "name": "your left knee", "hint": "Step back so your knees are visible"},
+			{"idx": PoseKeypoints.RIGHT_KNEE, "name": "your right knee", "hint": "Step back so your knees are visible"},
 		]
 
 	for point in key_points:
@@ -79,8 +79,12 @@ func analyze_calibration_pose(pose_landmarks) -> Dictionary:
 			x_ok = false
 		if pt.y < y_min or pt.y > y_max:
 			y_ok = false
+		# MoveNet always returns *some* position for every keypoint, even with
+		# nobody in frame — bounds alone aren't enough, confidence has to clear
+		# the same threshold the skeleton renderer uses to be trusted.
+		var confidence_ok = pt.visibility >= MediaPipePoseRenderer.VISIBILITY_THRESHOLD
 
-		if not (x_ok and y_ok):
+		if not (x_ok and y_ok and confidence_ok):
 			missing_parts.append(point.name)
 			result.missing.append(point.name)
 
@@ -140,14 +144,17 @@ func _build_missing_detail(missing_parts: Array[String], key_points: Array) -> S
 func compute_and_save_thresholds(pose_landmarks):
 	if pose_landmarks:
 		var landmarks = pose_landmarks.get_landmarks()
-		if landmarks.size() >= 33:
+		if landmarks.size() >= PoseKeypoints.NUM_KEYPOINTS:
 			# Check if key points are within the screen bounds [0.0, 1.0]
-			var key_indices = [0, 15, 16, 27, 28] # Nose, Wrists, Ankles
+			var key_indices = [PoseKeypoints.NOSE, PoseKeypoints.LEFT_WRIST, PoseKeypoints.RIGHT_WRIST, PoseKeypoints.LEFT_ANKLE, PoseKeypoints.RIGHT_ANKLE]
 			var all_visible = true
 			
 			for idx in key_indices:
 				var pt = landmarks[idx]
 				if pt.x < -0.25 or pt.x > 1.25 or pt.y < -0.2 or pt.y > 1.2:
+					all_visible = false
+					break
+				if pt.visibility < MediaPipePoseRenderer.VISIBILITY_THRESHOLD:
 					all_visible = false
 					break
 					

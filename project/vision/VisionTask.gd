@@ -240,7 +240,12 @@ func _camera_format_changed() -> void:
 	var offset := Vector2(min(size_rotated.x, 0), min(size_rotated.y, 0))
 	camera_texture.rotation = feed_rotation
 	camera_texture.position = offset * -1
-	camera_viewport.size = frame_size
+	# The viewport must be sized to the *rotated* bounding box, not the raw sensor
+	# frame_size — otherwise (confirmed on a phone reporting rotation=90deg) the
+	# rotated portrait content gets captured through a viewport still shaped for
+	# the original landscape sensor orientation, cropping/distorting what actually
+	# reaches pose inference. No-op when rotation is 0 (size_rotated == frame_size).
+	camera_viewport.size = Vector2i(int(round(abs(size_rotated.x))), int(round(abs(size_rotated.y))))
 
 func _camera_frame_changed() -> void:
 	if camera_texture == null:

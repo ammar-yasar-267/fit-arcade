@@ -28,11 +28,18 @@ static func calculate_angle(a: Vector3, b: Vector3, c: Vector3) -> float:
 	cosine = clampf(cosine, -1.0, 1.0)
 	return rad_to_deg(acos(cosine))
 
-## Extract a landmark position as Vector3 from normalized landmarks
+## Extract a landmark position as Vector3 from normalized landmarks.
+## Returns the Vector3.ZERO "missing" sentinel (same as an out-of-bounds index)
+## when the landmark's own confidence is below the trusted threshold — MoveNet
+## always emits *a* position for every joint, but during fast motion (e.g. a
+## lunge) a weak/occluded joint like the knee can read a low-confidence, noisy
+## position that would otherwise corrupt angle-based rep detection unfiltered.
 static func get_landmark_pos(landmarks: MediaPipeNormalizedLandmarks, index: int) -> Vector3:
 	var landmark_list = landmarks.get_landmarks()
 	if index < landmark_list.size():
 		var pt = landmark_list[index]
+		if pt.visibility < MediaPipePoseRenderer.VISIBILITY_THRESHOLD:
+			return Vector3.ZERO
 		return Vector3(pt.x, pt.y, pt.z)
 	return Vector3.ZERO
 

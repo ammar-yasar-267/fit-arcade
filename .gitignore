@@ -1,6 +1,8 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+project/android/
+project/build/
 
 # Admin web app (Next.js)
 admin/node_modules/

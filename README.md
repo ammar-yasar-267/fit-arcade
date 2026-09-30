@@ -1,6 +1,6 @@
 # 🏋️ FitArcade
 
-**FitArcade** is a mobile exergaming platform built on **Godot 4.x** and **MediaPipe**. It uses your phone's front-facing camera to detect full-body calisthenics exercises in real time, turning physical movement into game input across three dedicated arcade mini-games.
+**FitArcade** is a mobile exergaming platform built on **Godot 4.x**, using **MoveNet Lightning** (run through GDMP's MediaPipe graph runtime) for real-time pose detection. It uses your phone's front-facing camera to detect full-body calisthenics exercises in real time, turning physical movement into game input across three dedicated arcade mini-games.
 
 No controllers. No wearables. Just you, your phone, and a workout.
 
@@ -30,7 +30,7 @@ The project is structured into three clear layers:
 ### Vision (`project/vision/`)
 | File | Role |
 |---|---|
-| `PoseLandmarker.gd` | Wraps the MediaPipe Pose Landmarker task, processes camera frames, and forwards normalized landmarks to `ExerciseRecognizer` |
+| `PoseLandmarker.gd` | Runs a custom MediaPipe graph (`MoveNetGraph.gd`) loading MoveNet Lightning, processes camera frames, and forwards normalized landmarks to `ExerciseRecognizer` |
 
 ### Exercises (`project/exercises/`)
 Each exercise is a class extending `ExerciseBase` that implements `process_frame()`:
@@ -185,7 +185,7 @@ These shortcuts are disabled in release builds via `OS.is_debug_build()`.
 ## 📦 Dependencies
 
 - [Godot 4.x](https://godotengine.org/)
-- [GDMP (Godot MediaPipe)](https://github.com/j20001970/GDMP) — v744fc80
+- [GDMP (Godot MediaPipe)](https://github.com/j20001970/GDMP) — the MediaPipe graph runtime used to run pose inference (currently MoveNet Lightning via a custom graph; see `project/vision/pose_landmarker/MoveNetGraph.gd`)
 
 ---
 
@@ -193,6 +193,6 @@ These shortcuts are disabled in release builds via `OS.is_debug_build()`.
 
 1. Clone the repository
 2. Open `project/` in Godot 4.x
-3. Ensure GDMP binaries are present under `addons/GDMP/`
+3. Ensure GDMP binaries are present under `project/addons/GDMP/`
 4. Run on device or in editor with a working webcam
 5. Press **D** in-editor to skip calibration during testing
