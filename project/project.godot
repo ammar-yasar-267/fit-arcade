@@ -14,9 +14,9 @@ config/name="FitArcade"
 config/description="Mobile exergaming app — exercise your way through the game!"
 run/main_scene="uid://c5lpjegcml0ma"
 config/features=PackedStringArray("4.7", "GL Compatibility")
-boot_splash/bg_color=Color(0, 0, 0, 1)
-boot_splash/show_image=false
-config/icon="uid://qf42omyu1pvh"
+boot_splash/bg_color=Color(0.0431373, 0.0431373, 0.0470588, 1)
+boot_splash/image="res://branding/splash.png"
+config/icon="res://branding/icon.png"
 
 [autoload]
 
@@ -26,18 +26,20 @@ Global="*res://Global.gd"
 Settings="*res://Settings.gd"
 CalibrationManager="*res://core/CalibrationManager.gd"
 SessionManager="*res://core/SessionManager.gd"
+PerfStats="*res://core/PerfStats.gd"
 ExerciseRecognizer="*res://core/ExerciseRecognizer.gd"
 GameManager="*res://games/GameManager.gd"
 Backend="*res://backend/Backend.gd"
+Tokens="*res://ui/Tokens.gd"
 
 [display]
 
-window/size/viewport_width=540
-window/size/viewport_height=960
-window/size/window_width_override=405
-window/size/window_height_override=720
+window/size/viewport_width=390
+window/size/viewport_height=844
+window/size/window_width_override=390
+window/size/window_height_override=844
 window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
+window/stretch/aspect="keep_width"
 window/handheld/orientation=1
 
 [editor_plugins]

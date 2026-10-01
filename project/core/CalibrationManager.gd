@@ -6,162 +6,139 @@ var is_calibrated: bool = false
 func analyze_calibration_pose(pose_landmarks) -> Dictionary:
 	var result := {
 		"ready": false,
+		"is_present": false,
 		"message": "",
 		"detail": "",
 		"missing": [],
 	}
 
 	if pose_landmarks == null:
-		result.message = "Waiting for your pose"
-		result.detail = "Step into the camera view so I can see your full body."
+		result.message = "Too close to camera"
+		result.detail = "Body cut off — move 2–3 m away"
+		result.is_present = false
 		return result
 
 	var landmarks = pose_landmarks.get_landmarks()
 	if landmarks.size() < PoseKeypoints.NUM_KEYPOINTS:
-		result.message = "Pose not fully detected"
-		result.detail = "Keep your full body in frame until all key points are visible."
+		result.message = "Too close to camera"
+		result.detail = "Body cut off — move 2–3 m away"
+		result.is_present = false
 		return result
 
-	var missing_parts: Array[String] = []
-	# Decide which key points are required based on the selected pending game
+	# 1. Presence check: are core torso landmarks visible?
+	var nose = landmarks[PoseKeypoints.NOSE]
+	var l_sh = landmarks[PoseKeypoints.LEFT_SHOULDER]
+	var r_sh = landmarks[PoseKeypoints.RIGHT_SHOULDER]
+	var l_hip = landmarks[PoseKeypoints.LEFT_HIP]
+	var r_hip = landmarks[PoseKeypoints.RIGHT_HIP]
+
+	var core_confidence = maxf(l_sh.visibility, r_sh.visibility)
+	if core_confidence < 0.30 and nose.visibility < 0.30:
+		# Nobody in frame
+		result.is_present = false
+		result.message = "Too close to camera"
+		result.detail = "Body cut off — move 2–3 m away"
+		return result
+
+	result.is_present = true
+
+	# 2. Too close check:
+	# If player is standing right next to the camera, shoulders take up a huge portion of width,
+	# or head is at top edge and hips are near bottom.
+	var shoulder_width = abs(l_sh.x - r_sh.x)
+	var is_too_close = shoulder_width > 0.44 or (nose.y < 0.05 and (l_hip.y > 0.80 or r_hip.y > 0.80))
+	if is_too_close:
+		result.message = "Too close to camera"
+		result.detail = "Body cut off — move 2–3 m away"
+		return result
+
 	var game := GameManager.pending_game_name if typeof(GameManager) != TYPE_NIL else ""
-	var key_points = []
+	if game == "":
+		game = "dino"
 
-	# Default: require head + wrists + ankles (full-body)
-	key_points = [
-		{"idx": PoseKeypoints.NOSE, "name": "your head", "hint": "Lift your chin into frame"},
-		{"idx": PoseKeypoints.LEFT_WRIST, "name": "your left wrist", "hint": "Raise your left arm into view"},
-		{"idx": PoseKeypoints.RIGHT_WRIST, "name": "your right wrist", "hint": "Raise your right arm into view"},
-		{"idx": PoseKeypoints.LEFT_ANKLE, "name": "your left ankle", "hint": "Step back so your left foot is visible"},
-		{"idx": PoseKeypoints.RIGHT_ANKLE, "name": "your right ankle", "hint": "Step back so your right foot is visible"},
-	]
+	var l_wr = landmarks[PoseKeypoints.LEFT_WRIST]
+	var r_wr = landmarks[PoseKeypoints.RIGHT_WRIST]
+	var l_el = landmarks[PoseKeypoints.LEFT_ELBOW]
+	var r_el = landmarks[PoseKeypoints.RIGHT_ELBOW]
+	var l_kn = landmarks[PoseKeypoints.LEFT_KNEE]
+	var r_kn = landmarks[PoseKeypoints.RIGHT_KNEE]
+	var l_ank = landmarks[PoseKeypoints.LEFT_ANKLE]
+	var r_ank = landmarks[PoseKeypoints.RIGHT_ANKLE]
 
-	if game == "flappy":
-		# Flappy only needs the arms (wrists) and head for orientation
-		key_points = [
-			{"idx": PoseKeypoints.NOSE, "name": "your head", "hint": "Keep your head visible"},
-			{"idx": PoseKeypoints.LEFT_WRIST, "name": "your left wrist", "hint": "Raise your left arm into view"},
-			{"idx": PoseKeypoints.RIGHT_WRIST, "name": "your right wrist", "hint": "Raise your right arm into view"},
-		]
-	elif game == "dino":
-		# Dino (jumping) needs feet and maybe head
-		key_points = [
-			{"idx": PoseKeypoints.NOSE, "name": "your head", "hint": "Keep your head visible"},
-			{"idx": PoseKeypoints.LEFT_ANKLE, "name": "your left ankle", "hint": "Step back so your left foot is visible"},
-			{"idx": PoseKeypoints.RIGHT_ANKLE, "name": "your right ankle", "hint": "Step back so your right foot is visible"},
-		]
-	elif game == "switcher":
-		# Switcher (lunges) now only needs knees instead of ankles
-		key_points = [
-			{"idx": PoseKeypoints.NOSE, "name": "your head", "hint": "Keep your head visible"},
-			{"idx": PoseKeypoints.LEFT_KNEE, "name": "your left knee", "hint": "Step back so your knees are visible"},
-			{"idx": PoseKeypoints.RIGHT_KNEE, "name": "your right knee", "hint": "Step back so your knees are visible"},
-		]
+	match game:
+		"dino":
+			# JUMPING JACKS: Requires full body in frame (both ARMS and LEGS)
+			# Arms check: wrists in bounds with good visibility, or elbows visible with vertical headroom
+			var left_arm_ok = (l_wr.visibility >= 0.35 and l_wr.x >= 0.02 and l_wr.x <= 0.98 and l_wr.y >= 0.02 and l_wr.y <= 0.95) or (l_el.visibility >= 0.35 and l_el.x >= 0.05 and l_el.x <= 0.95 and l_el.y <= 0.85)
+			var right_arm_ok = (r_wr.visibility >= 0.35 and r_wr.x >= 0.02 and r_wr.x <= 0.98 and r_wr.y >= 0.02 and r_wr.y <= 0.95) or (r_el.visibility >= 0.35 and r_el.x >= 0.05 and r_el.x <= 0.95 and r_el.y <= 0.85)
+			var arms_ok = left_arm_ok and right_arm_ok
 
-	for point in key_points:
-		var pt = landmarks[point.idx]
-		var x_ok = true
-		var y_ok = true
+			# Legs check: knees must be clearly in frame (not cut off at bottom of screen)
+			var left_knee_ok = l_kn.visibility >= 0.35 and l_kn.y >= 0.35 and l_kn.y <= 0.88 and l_kn.x >= 0.05 and l_kn.x <= 0.95
+			var right_knee_ok = r_kn.visibility >= 0.35 and r_kn.y >= 0.35 and r_kn.y <= 0.88 and r_kn.x >= 0.05 and r_kn.x <= 0.95
+			var ankles_ok = l_ank.visibility >= 0.30 and r_ank.visibility >= 0.30 and l_ank.y <= 0.98 and r_ank.y <= 0.98
+			var knees_high = l_kn.y <= 0.80 and r_kn.y <= 0.80
+			var legs_ok = left_knee_ok and right_knee_ok and (ankles_ok or knees_high)
 
-		# By default allow a generous off-screen margin
-		var x_min = -0.25
-		var x_max = 1.25
-		var y_min = -0.2
-		var y_max = 1.2
+			if not arms_ok and not legs_ok:
+				result.missing = ["arms", "legs"]
+				result.message = "Show your arms and legs"
+				result.detail = "Step back so your full body from hands to feet is in frame."
+			elif not arms_ok:
+				result.missing = ["arms"]
+				result.message = "Show your arms"
+				result.detail = "Raise your arms into view for Jumping Jacks."
+			elif not legs_ok:
+				result.missing = ["legs"]
+				result.message = "Show your legs"
+				result.detail = "Step back so your legs are visible in frame."
+			else:
+				result.ready = true
+				result.message = "Good framing"
+				result.detail = "Hold steady and keep your full body in frame."
 
-		# Relax horizontal bounds for wrists if they are raised upward (y small)
-		if point.name.find("wrist") != -1:
-			if pt.y < 0.30:
-				x_min = -0.40
-				x_max = 1.40
+		"lane", "switcher":
+			# SIDE LUNGES: Requires KNEES strictly in frame with clear lower body clearance
+			var left_knee_ok = l_kn.visibility >= 0.35 and l_kn.y >= 0.35 and l_kn.y <= 0.88 and l_kn.x >= 0.05 and l_kn.x <= 0.95
+			var right_knee_ok = r_kn.visibility >= 0.35 and r_kn.y >= 0.35 and r_kn.y <= 0.88 and r_kn.x >= 0.05 and r_kn.x <= 0.95
+			# Both hips must be visible to ensure torso is framed
+			var hips_ok = l_hip.visibility >= 0.35 and r_hip.visibility >= 0.35 and l_hip.y <= 0.75 and r_hip.y <= 0.75
+			# Lower leg clearance: ankles visible or knees high enough that bending doesn't drop off screen
+			var ankles_ok = l_ank.visibility >= 0.28 and r_ank.visibility >= 0.28 and l_ank.y <= 0.98 and r_ank.y <= 0.98
+			var knees_clear = l_kn.y <= 0.80 and r_kn.y <= 0.80
 
-		if pt.x < x_min or pt.x > x_max:
-			x_ok = false
-		if pt.y < y_min or pt.y > y_max:
-			y_ok = false
-		# MoveNet always returns *some* position for every keypoint, even with
-		# nobody in frame — bounds alone aren't enough, confidence has to clear
-		# the same threshold the skeleton renderer uses to be trusted.
-		var confidence_ok = pt.visibility >= MediaPipePoseRenderer.VISIBILITY_THRESHOLD
+			if not left_knee_ok or not right_knee_ok or not hips_ok or not (ankles_ok or knees_clear):
+				result.missing = ["knees"]
+				result.message = "Show your knees"
+				result.detail = "Side Lunges needs your knees and legs clearly in frame."
+			else:
+				result.ready = true
+				result.message = "Good framing"
+				result.detail = "Hold steady and keep your body in frame."
 
-		if not (x_ok and y_ok and confidence_ok):
-			missing_parts.append(point.name)
-			result.missing.append(point.name)
+		"flappy":
+			# ARM RAISES: Requires ARMS in frame
+			var left_arm_ok = (l_wr.visibility >= 0.35 and l_wr.x >= 0.02 and l_wr.x <= 0.98 and l_wr.y >= 0.02 and l_wr.y <= 0.95) or (l_el.visibility >= 0.35 and l_el.x >= 0.05 and l_el.x <= 0.95 and l_el.y <= 0.85)
+			var right_arm_ok = (r_wr.visibility >= 0.35 and r_wr.x >= 0.02 and r_wr.x <= 0.98 and r_wr.y >= 0.02 and r_wr.y <= 0.95) or (r_el.visibility >= 0.35 and r_el.x >= 0.05 and r_el.x <= 0.95 and r_el.y <= 0.85)
+			var shoulders_ok = l_sh.visibility >= 0.35 and r_sh.visibility >= 0.35
 
-	if missing_parts.is_empty():
-		# Check if person is too close (bounding box too large)
-		var min_y = 1.0
-		var max_y = 0.0
-		var min_x = 1.0
-		var max_x = 0.0
-		
-		for pt in landmarks:
-			if pt.y < min_y:
-				min_y = pt.y
-			if pt.y > max_y:
-				max_y = pt.y
-			if pt.x < min_x:
-				min_x = pt.x
-			if pt.x > max_x:
-				max_x = pt.x
-		
-		var body_height = max_y - min_y
-		var body_width = max_x - min_x
-		
-		# If body takes up more than 95% of screen height, person is too close
-		if body_height > 0.95:
-			result.message = "Too close to camera"
-			result.detail = "Step back a bit so your full body fits comfortably in frame."
-		else:
-			result.ready = true
-			result.message = "Good framing"
-			result.detail = "Hold steady and keep your full body in frame for a moment."
-	else:
-		result.message = "Adjust your framing"
-		result.detail = _build_missing_detail(missing_parts, key_points)
+			if not left_arm_ok or not right_arm_ok or not shoulders_ok:
+				result.missing = ["arms"]
+				result.message = "Show your arms"
+				result.detail = "Arm Raises needs your arms in frame."
+			else:
+				result.ready = true
+				result.message = "Good framing"
+				result.detail = "Hold steady and keep your arms in frame."
 
 	return result
 
-func _build_missing_detail(missing_parts: Array[String], key_points: Array) -> String:
-	if missing_parts.is_empty():
-		return "Hold steady and keep your full body in frame."
-
-	var hints: Array[String] = []
-	for part_name in missing_parts:
-		for point in key_points:
-			if point.name == part_name:
-				hints.append(point.hint)
-				break
-
-	if hints.size() == 1:
-		return hints[0]
-
-	if hints.size() == 2:
-		return "%s and %s" % [hints[0], hints[1]]
-
-	return "%s, %s, and %s" % [hints[0], hints[1], hints[2]]
-
-func compute_and_save_thresholds(pose_landmarks):
+func compute_and_save_thresholds(pose_landmarks) -> bool:
 	if pose_landmarks:
-		var landmarks = pose_landmarks.get_landmarks()
-		if landmarks.size() >= PoseKeypoints.NUM_KEYPOINTS:
-			# Check if key points are within the screen bounds [0.0, 1.0]
-			var key_indices = [PoseKeypoints.NOSE, PoseKeypoints.LEFT_WRIST, PoseKeypoints.RIGHT_WRIST, PoseKeypoints.LEFT_ANKLE, PoseKeypoints.RIGHT_ANKLE]
-			var all_visible = true
-			
-			for idx in key_indices:
-				var pt = landmarks[idx]
-				if pt.x < -0.25 or pt.x > 1.25 or pt.y < -0.2 or pt.y > 1.2:
-					all_visible = false
-					break
-				if pt.visibility < MediaPipePoseRenderer.VISIBILITY_THRESHOLD:
-					all_visible = false
-					break
-					
-			if all_visible:
-				is_calibrated = true
-				baseline_posture = {"landmarks_detected": true}
-				return true
+		var res = analyze_calibration_pose(pose_landmarks)
+		if res.ready:
+			baseline_posture = {"landmarks_detected": true}
+			return true
 	return false
 
 func reset_calibration():

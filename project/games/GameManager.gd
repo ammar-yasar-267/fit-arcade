@@ -14,6 +14,7 @@ func _ready() -> void:
 func _register_default_games() -> void:
 	register_game("dino", "res://games/dino/DinoGame.tscn")
 	register_game("switcher", "res://games/switcher/SwitcherGame.tscn")
+	register_game("lane", "res://games/switcher/SwitcherGame.tscn")
 	register_game("flappy", "res://games/flappy/FlappyBird.tscn")
 
 func register_game(game_name: String, scene_path: String) -> void:

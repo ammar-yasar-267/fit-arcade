@@ -19,6 +19,8 @@ func start_game() -> void:
 	score = 0
 	is_running = true
 	SessionManager.reset_session()
+	# Fresh pipeline stats for this game (calibration frames shouldn't skew them)
+	PerfStats.reset()
 	score_changed.emit(score)
 
 func end_game() -> void:

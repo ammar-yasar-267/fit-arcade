@@ -22,23 +22,38 @@ var _paused_exercise = null
 # Using a timestamp instead of a boolean prevents permanent lockup when
 # MediaPipe does not call back (e.g. no person in frame).
 var last_inference_ms: int = -1
+## Id (packet timestamp) of the most recent frame handed to the model. Only its answer
+## frees the in-flight gate; a late answer for an older frame mustn't.
+var _latest_sent_id: int = -1
 
 # HUD elements for gameplay
 var score_label: Label = null
 var timer_label: Label = null
 var rep_label: Label = null
 var prompt_label: Label = null
-var latency_live_label: Label = null
 var elapsed_time: float = 0.0
 var is_timing: bool = false
-var _perf_update_timer: float = 0.0
 
 func _on_graph_packets(packets: Dictionary) -> void:
-	if last_inference_ms >= 0:
-		var duration_ms: float = Time.get_ticks_msec() - last_inference_ms
-		if duration_ms >= 0.0:
-			SessionManager.record_inference(duration_ms)
-	last_inference_ms = -1
+	var result_us := Time.get_ticks_usec()
+	# MediaPipe carries the input frame's timestamp through to its output, so the answer
+	# is matched to ITS frame. With no pose found there is no output packet to read an id
+	# from; MediaPipe still answers in send order, so that's the oldest outstanding frame.
+	var frame_id: int
+	if packets.has("pose_landmarks"):
+		frame_id = (packets["pose_landmarks"] as MediaPipePacket).timestamp
+	else:
+		frame_id = PerfStats.oldest_pending_id()
+	PerfStats.frame_result(frame_id, result_us)
+	if frame_id == _latest_sent_id or frame_id == -1:
+		last_inference_ms = -1
+
+	_handle_graph_result(packets)
+	PerfStats.frame_done(frame_id)
+
+## Recognition, drawing and UI updates for one model result. Everything in here counts
+## towards the frame's "post" time.
+func _handle_graph_result(packets: Dictionary) -> void:
 	if not packets.has("pose_landmarks") or _last_camera_image == null:
 		show_result(_last_camera_image, null)
 		return
@@ -122,7 +137,7 @@ func _init_task():
 		return
 	var bytes := file.get_buffer(file.get_length())
 	var model_path := _ensure_model_on_disk(bytes)
-	graph = MoveNetGraph.new(model_path)
+	graph = MoveNetGraph.new(model_path, Settings.use_hardware_accel())
 	graph.packets_callback.connect(self._on_graph_packets)
 	graph.error.connect(func(msg): push_error("MoveNet graph error: ", msg))
 	renderer = MediaPipePoseRenderer.new()
@@ -251,11 +266,23 @@ func _start_exercise_and_game() -> void:
 					if game_instance is Node2D:
 						game_instance.position.x = (logical_width - 540.0) / 2.0
 					
-					# HUD.gd (inside the game scene) is the primary in-game HUD
-					
 					GameManager.set_active_game(game_instance)
+
+					# Reparent HUD to main window CanvasLayer so HUD controls, top bar,
+					# primed overlay, paused overlay, and PIP card operate cleanly at
+					# native viewport coordinates:
+					var hud_node = game_instance.get_node_or_null("HUD")
+					if hud_node:
+						game_instance.remove_child(hud_node)
+						hud_node.request_ready()
+						add_child(hud_node)
+						game_instance.hud = hud_node
+						if hud_node.has_method("bind_game"):
+							hud_node.bind_game(game_instance)
+					
 					game_instance.start_game()
-					game_instance.game_over.connect(_on_game_over)
+					if not game_instance.game_over.is_connected(_on_game_over):
+						game_instance.game_over.connect(_on_game_over)
 		_create_pose_preview()
 	else:
 		# CALIBRATION MODE: show full-screen camera feed
@@ -269,300 +296,67 @@ func _start_exercise_and_game() -> void:
 			image_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
 			image_view.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 
+func _preview_views() -> Array:
+	return [image_view, pose_preview]
+
 func _create_pose_preview() -> void:
+	# Bind directly to HUD's PIP preview
+	var active_game = GameManager.get_active_game()
+	var hud_node: GameHUD = null
+	if active_game:
+		if active_game.get("hud") != null and active_game.hud is GameHUD:
+			hud_node = active_game.hud
+		elif active_game.has_node("HUD"):
+			hud_node = active_game.get_node("HUD") as GameHUD
+	if hud_node == null:
+		hud_node = get_node_or_null("HUD") as GameHUD
+
+	if hud_node and hud_node.has_method("get_pip_preview"):
+		pose_preview = hud_node.get_pip_preview()
+		_apply_preview_mirror()
+		if not ExerciseRecognizer.rep_completed.is_connected(_on_preview_rep):
+			ExerciseRecognizer.rep_completed.connect(_on_preview_rep)
+		return
+
+	# Fallback if running standalone PoseLandmarker scene without HUD (spec D3: 96x144, 2px border):
 	pose_canvas = CanvasLayer.new()
-	pose_canvas.layer = 10
-
-	overlay_root = Control.new()
-	overlay_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	pose_canvas.add_child(overlay_root)
-
-	# --- Full-screen invisible tap area → shows pause menu ---
-	var tap_btn := Button.new()
-	tap_btn.set_anchors_preset(Control.PRESET_FULL_RECT)
-	tap_btn.flat = true
-	var tap_style := StyleBoxFlat.new()
-	tap_style.bg_color = Color(0, 0, 0, 0)
-	tap_btn.add_theme_stylebox_override("normal", tap_style)
-	tap_btn.add_theme_stylebox_override("hover", tap_style)
-	tap_btn.add_theme_stylebox_override("pressed", tap_style)
-	tap_btn.mouse_default_cursor_shape = Control.CURSOR_ARROW
-	tap_btn.pressed.connect(_on_screen_tapped)
-	overlay_root.add_child(tap_btn)
-
-	# --- Pause overlay (hidden by default) ---
-	pause_overlay_ref = ColorRect.new()
-	pause_overlay_ref.color = Color(0, 0, 0, 0.78)
-	pause_overlay_ref.set_anchors_preset(Control.PRESET_FULL_RECT)
-	pause_overlay_ref.visible = false
-
-	var pause_center := CenterContainer.new()
-	pause_center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	pause_overlay_ref.add_child(pause_center)
-
-	var pause_card := PanelContainer.new()
-	pause_card.custom_minimum_size = Vector2(380, 0)
-	var pause_card_style := StyleBoxFlat.new()
-	pause_card_style.bg_color = Color("#1A1640")
-	pause_card_style.border_width_top = 4
-	pause_card_style.border_color = Color("#06B6D4")
-	pause_card_style.corner_radius_top_left = 24
-	pause_card_style.corner_radius_top_right = 24
-	pause_card_style.corner_radius_bottom_left = 24
-	pause_card_style.corner_radius_bottom_right = 24
-	pause_card_style.content_margin_left = 32
-	pause_card_style.content_margin_right = 32
-	pause_card_style.content_margin_top = 32
-	pause_card_style.content_margin_bottom = 32
-	pause_card_style.shadow_color = Color(0, 0, 0, 0.5)
-	pause_card_style.shadow_size = 20
-	pause_card.add_theme_stylebox_override("panel", pause_card_style)
-	pause_center.add_child(pause_card)
-
-	var pause_inner := VBoxContainer.new()
-	pause_inner.alignment = BoxContainer.ALIGNMENT_CENTER
-	pause_inner.add_theme_constant_override("separation", 24)
-	pause_card.add_child(pause_inner)
-
-	var pause_title := Label.new()
-	pause_title.text = "Paused"
-	pause_title.add_theme_font_size_override("font_size", 52)
-	pause_title.add_theme_color_override("font_color", Color("#06B6D4"))
-	pause_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	pause_inner.add_child(pause_title)
-
-	var resume_btn := _make_pause_btn("Resume", true)
-	resume_btn.pressed.connect(_resume_game)
-	pause_inner.add_child(resume_btn)
-
-	var pause_menu_btn := _make_pause_btn("Main Menu", false)
-	pause_menu_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://Main.tscn"))
-	pause_inner.add_child(pause_menu_btn)
-
-	overlay_root.add_child(pause_overlay_ref)
-
-	# --- Bottom dock: camera only, fixed-width centered card ---
-	var dock := PanelContainer.new()
-	dock.anchor_left = 0.5
-	dock.anchor_right = 0.5
-	dock.anchor_top = 1.0
-	dock.anchor_bottom = 1.0
-	dock.offset_left = -185
-	dock.offset_right = 185
-	dock.offset_top = -200
-	dock.offset_bottom = -16
-	var dock_style := StyleBoxFlat.new()
-	dock_style.bg_color = Color("#08081C", 0.96)
-	dock_style.border_color = Color("#06B6D4", 0.4)
-	dock_style.border_width_top = 2
-	dock_style.corner_radius_top_left = 32
-	dock_style.corner_radius_top_right = 32
-	dock_style.corner_radius_bottom_left = 32
-	dock_style.corner_radius_bottom_right = 32
-	dock_style.content_margin_left = 20
-	dock_style.content_margin_right = 20
-	dock_style.content_margin_top = 18
-	dock_style.content_margin_bottom = 18
-	dock.add_theme_stylebox_override("panel", dock_style)
-	overlay_root.add_child(dock)
-
-	var dock_hbox := HBoxContainer.new()
-	dock_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dock_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	dock_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	dock_hbox.add_theme_constant_override("separation", 16)
-	dock.add_child(dock_hbox)
-
-	# Camera feed
-	var cam_panel := PanelContainer.new()
-	cam_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var cam_style := StyleBoxFlat.new()
-	cam_style.bg_color = Color(0, 0, 0, 0.5)
-	cam_style.corner_radius_top_left = 10
-	cam_style.corner_radius_top_right = 10
-	cam_style.corner_radius_bottom_left = 10
-	cam_style.corner_radius_bottom_right = 10
-	cam_panel.add_theme_stylebox_override("panel", cam_style)
-	dock_hbox.add_child(cam_panel)
-
-	pose_preview = TextureRect.new()
-	pose_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	pose_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	pose_preview.custom_minimum_size = Vector2(210, 130)
-	pose_preview.texture = ImageTexture.new()
-	cam_panel.add_child(pose_preview)
-
-	# Live performance metrics beside the camera
-	var metrics_col := VBoxContainer.new()
-	metrics_col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	metrics_col.add_theme_constant_override("separation", 8)
-	dock_hbox.add_child(metrics_col)
-
-	latency_live_label = Label.new()
-	latency_live_label.text = "--"
-	latency_live_label.add_theme_font_size_override("font_size", 28)
-	latency_live_label.add_theme_color_override("font_color", Color("#06B6D4"))
-	latency_live_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	metrics_col.add_child(latency_live_label)
-
-	var lat_caption := Label.new()
-	lat_caption.text = "RESPONSE\nTIME (MS)"
-	lat_caption.add_theme_font_size_override("font_size", 13)
-	lat_caption.add_theme_color_override("font_color", Color("#A09CC0"))
-	lat_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	metrics_col.add_child(lat_caption)
-
-	# Hidden labels — kept so signal handlers don't crash
-	timer_label = Label.new()
-	timer_label.visible = false
-	overlay_root.add_child(timer_label)
-
-	score_label = Label.new()
-	score_label.visible = false
-	overlay_root.add_child(score_label)
-
-	rep_label = Label.new()
-	rep_label.visible = false
-	overlay_root.add_child(rep_label)
-
-	prompt_label = Label.new()
-	prompt_label.visible = false
-	overlay_root.add_child(prompt_label)
-
+	pose_canvas.layer = 5
 	add_child(pose_canvas)
 
-	# Connect signals
-	ExerciseRecognizer.rep_completed.connect(_on_preview_rep)
-	if game_instance:
-		if not game_instance.score_changed.is_connected(_on_game_score_changed):
-			game_instance.score_changed.connect(_on_game_score_changed)
-		if not game_instance.game_over.is_connected(_on_game_over_reset):
-			game_instance.game_over.connect(_on_game_over_reset)
-		is_timing = false
-		elapsed_time = 0.0
+	var pip_card := PanelContainer.new()
+	pip_card.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	pip_card.offset_right = -12
+	pip_card.offset_bottom = -12
+	pip_card.offset_left = -108
+	pip_card.offset_top = -156
+	pip_card.custom_minimum_size = Vector2(96, 144)
+	pip_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-func _make_dock_icon_btn(icon: String, icon_size: int) -> Button:
-	var btn := Button.new()
-	btn.text = icon
-	btn.custom_minimum_size = Vector2(76, 76)
-	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	btn.add_theme_font_size_override("font_size", icon_size)
-	btn.add_theme_color_override("font_color", Color("#9896C8"))
-	btn.add_theme_color_override("font_hover_color", Color("#FFFFFF"))
-	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color("#12112E")
-	normal.border_width_left = 2
-	normal.border_width_right = 2
-	normal.border_width_top = 2
-	normal.border_width_bottom = 2
-	normal.border_color = Color("#06B6D4", 0.5)
-	normal.corner_radius_top_left = 999
-	normal.corner_radius_top_right = 999
-	normal.corner_radius_bottom_left = 999
-	normal.corner_radius_bottom_right = 999
-	normal.shadow_color = Color("#06B6D4", 0.18)
-	normal.shadow_size = 10
-	normal.content_margin_left = 16
-	normal.content_margin_right = 16
-	normal.content_margin_top = 16
-	normal.content_margin_bottom = 16
-	btn.add_theme_stylebox_override("normal", normal)
-	var hover := normal.duplicate()
-	hover.bg_color = Color("#1C1A4A")
-	hover.border_color = Color("#06B6D4", 1.0)
-	hover.shadow_color = Color("#06B6D4", 0.45)
-	hover.shadow_size = 16
-	btn.add_theme_stylebox_override("hover", hover)
-	return btn
-
-func _make_chip_panel() -> PanelContainer:
-	var chip := PanelContainer.new()
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.09, 0.12, 0.9)
-	style.corner_radius_top_left = 999
-	style.corner_radius_top_right = 999
-	style.corner_radius_bottom_left = 999
-	style.corner_radius_bottom_right = 999
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
-	chip.add_theme_stylebox_override("panel", style)
-	return chip
+	style.bg_color = Color("#111111")
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(1.0, 1.0, 1.0, 0.8)
+	style.corner_radius_top_left = 2
+	style.corner_radius_top_right = 2
+	style.corner_radius_bottom_left = 2
+	style.corner_radius_bottom_right = 2
+	pip_card.add_theme_stylebox_override("panel", style)
+	pose_canvas.add_child(pip_card)
 
-func _make_chip_button(text: String) -> Button:
-	var btn := Button.new()
-	btn.text = text
-	btn.add_theme_font_size_override("font_size", 22)
-	btn.custom_minimum_size = Vector2(0, 36)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.09, 0.12, 0.9)
-	style.corner_radius_top_left = 999
-	style.corner_radius_top_right = 999
-	style.corner_radius_bottom_left = 999
-	style.corner_radius_bottom_right = 999
-	style.content_margin_left = 14
-	style.content_margin_right = 14
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	btn.add_theme_stylebox_override("normal", style)
-	var hover := style.duplicate()
-	hover.bg_color = Color(0.12, 0.14, 0.19, 0.95)
-	btn.add_theme_stylebox_override("hover", hover)
-	return btn
+	pose_preview = TextureRect.new()
+	pose_preview.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pose_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pose_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	pose_preview.texture = ImageTexture.new()
+	pose_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pip_card.add_child(pose_preview)
+	_apply_preview_mirror()
 
-
-func _on_screen_tapped() -> void:
-	if pause_overlay_ref and not pause_overlay_ref.visible:
-		if game_instance and game_instance.is_running:
-			_paused_exercise = ExerciseRecognizer.current_exercise
-			ExerciseRecognizer.current_exercise = null
-			game_instance.process_mode = Node.PROCESS_MODE_DISABLED
-			pause_overlay_ref.show()
-
-func _resume_game() -> void:
-	if _paused_exercise != null:
-		ExerciseRecognizer.current_exercise = _paused_exercise
-		_paused_exercise = null
-	if game_instance:
-		game_instance.process_mode = Node.PROCESS_MODE_INHERIT
-	if pause_overlay_ref:
-		pause_overlay_ref.hide()
-
-func _make_pause_btn(text: String, primary: bool) -> Button:
-	var btn := Button.new()
-	btn.text = text
-	btn.add_theme_font_size_override("font_size", 26)
-	btn.custom_minimum_size = Vector2(300, 58)
-	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	var style := StyleBoxFlat.new()
-	if primary:
-		style.bg_color = Color("#06B6D4")
-	else:
-		style.bg_color = Color("#11102B")
-		style.border_width_left = 2
-		style.border_width_right = 2
-		style.border_width_top = 2
-		style.border_width_bottom = 2
-		style.border_color = Color("#06B6D4")
-	style.corner_radius_top_left = 14
-	style.corner_radius_top_right = 14
-	style.corner_radius_bottom_left = 14
-	style.corner_radius_bottom_right = 14
-	style.content_margin_left = 20
-	style.content_margin_right = 20
-	style.content_margin_top = 12
-	style.content_margin_bottom = 12
-	btn.add_theme_stylebox_override("normal", style)
-	var hover := style.duplicate()
-	if primary:
-		hover.bg_color = Color("#0891B2")
-	else:
-		hover.bg_color = Color("#1A1640")
-	btn.add_theme_stylebox_override("hover", hover)
-	return btn
+	if not ExerciseRecognizer.rep_completed.is_connected(_on_preview_rep):
+		ExerciseRecognizer.rep_completed.connect(_on_preview_rep)
 
 func _on_preview_rep() -> void:
 	if rep_label:
@@ -594,154 +388,12 @@ func _get_state_name(state: int) -> String:
 		ExerciseRecognizer.State.REP_COUNTED: return "REP!"
 		_: return "?"
 
-func _on_game_over(score: int, reps: int = 0) -> void:
-	# If the game ended while paused, restore the exercise so Play Again works
+func _on_game_over(_score: int, _reps: int = 0) -> void:
 	if _paused_exercise != null:
 		ExerciseRecognizer.current_exercise = _paused_exercise
 		_paused_exercise = null
 	if game_instance:
 		game_instance.process_mode = Node.PROCESS_MODE_INHERIT
-
-	if pause_overlay_ref and pause_overlay_ref.visible:
-		pause_overlay_ref.hide()
-
-	var overlay := ColorRect.new()
-	overlay.color = Color(0, 0, 0, 0.85)
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-
-	var root := CenterContainer.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.add_child(root)
-
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(460, 0)
-	var pstyle := StyleBoxFlat.new()
-	pstyle.bg_color = Color("#1A1640")
-	pstyle.border_width_top = 4
-	pstyle.border_color = Color("#06B6D4")
-	pstyle.corner_radius_top_left = 28
-	pstyle.corner_radius_top_right = 28
-	pstyle.corner_radius_bottom_left = 28
-	pstyle.corner_radius_bottom_right = 28
-	pstyle.content_margin_left = 32
-	pstyle.content_margin_right = 32
-	pstyle.content_margin_top = 32
-	pstyle.content_margin_bottom = 32
-	pstyle.shadow_color = Color(0, 0, 0, 0.5)
-	pstyle.shadow_size = 24
-	panel.add_theme_stylebox_override("panel", pstyle)
-	root.add_child(panel)
-
-	var inner := VBoxContainer.new()
-	inner.alignment = BoxContainer.ALIGNMENT_CENTER
-	inner.add_theme_constant_override("separation", 28)
-	panel.add_child(inner)
-
-	var title := Label.new()
-	title.text = "GAME OVER"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 64)
-	title.add_theme_color_override("font_color", Color("#06B6D4"))
-	inner.add_child(title)
-
-	var secs := int(elapsed_time)
-	var time_str := "%d:%02d" % [secs / 60.0, secs % 60]
-
-	var chips_row := HBoxContainer.new()
-	chips_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	chips_row.add_theme_constant_override("separation", 12)
-	chips_row.add_child(_make_result_chip("Score", str(score)))
-	chips_row.add_child(_make_result_chip("Time", time_str))
-	chips_row.add_child(_make_result_chip("Reps", str(SessionManager.current_reps)))
-	inner.add_child(chips_row)
-
-	var avg_latency: float = SessionManager.get_avg_latency_ms()
-	var perf_row := HBoxContainer.new()
-	perf_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	perf_row.add_child(_make_result_chip("Response Time", "%.0f ms" % avg_latency))
-	inner.add_child(perf_row)
-
-	var leaderboard_status := Label.new()
-	leaderboard_status.text = "Saving to leaderboard…"
-	leaderboard_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	leaderboard_status.add_theme_font_size_override("font_size", 16)
-	leaderboard_status.add_theme_color_override("font_color", Color("#A09CC0"))
-	inner.add_child(leaderboard_status)
-	_submit_score_and_update_label(GameManager.selected_game_name, score, reps, leaderboard_status)
-
-	var btns_col := VBoxContainer.new()
-	btns_col.add_theme_constant_override("separation", 12)
-	inner.add_child(btns_col)
-
-	var replay_btn := _make_pause_btn("Play Again", true)
-	replay_btn.pressed.connect(func():
-		if game_instance and game_instance.has_method("start_game"):
-			game_instance.start_game()
-			if overlay.get_parent():
-				overlay.get_parent().remove_child(overlay)
-	)
-	btns_col.add_child(replay_btn)
-
-	var menu_btn := _make_pause_btn("Main Menu", false)
-	menu_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://Main.tscn"))
-	btns_col.add_child(menu_btn)
-
-
-	if pose_canvas:
-		pose_canvas.add_child(overlay)
-	else:
-		add_child(overlay)
-
-func _submit_score_and_update_label(game_mode: String, score: int, reps: int, label: Label) -> void:
-	var ok := await Backend.submit_score(game_mode, score, reps)
-	if not is_instance_valid(label):
-		return
-	if ok:
-		label.text = "Saved to leaderboard"
-		label.add_theme_color_override("font_color", Color("#22C55E"))
-	else:
-		label.text = "Couldn't save — check your connection"
-		label.add_theme_color_override("font_color", Color("#EF4444"))
-
-func _make_result_chip(label_text: String, value_text: String) -> PanelContainer:
-	var chip := PanelContainer.new()
-	chip.custom_minimum_size = Vector2(130, 90)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#11102B")
-	style.border_width_left = 2
-	style.border_width_right = 2
-	style.border_width_top = 2
-	style.border_width_bottom = 2
-	style.border_color = Color("#06B6D4", 0.4)
-	style.corner_radius_top_left = 20
-	style.corner_radius_top_right = 20
-	style.corner_radius_bottom_left = 20
-	style.corner_radius_bottom_right = 20
-	style.content_margin_left = 20
-	style.content_margin_right = 20
-	style.content_margin_top = 15
-	style.content_margin_bottom = 15
-	chip.add_theme_stylebox_override("panel", style)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	chip.add_child(vbox)
-
-	var label := Label.new()
-	label.text = label_text.to_upper()
-	label.add_theme_font_size_override("font_size", 22)
-	label.add_theme_color_override("font_color", Color("#A09CC0"))
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(label)
-
-	var value := Label.new()
-	value.text = value_text
-	value.add_theme_font_size_override("font_size", 38)
-	value.add_theme_color_override("font_color", Color("#FFFFFF"))
-	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(value)
-	return chip
 
 func _process(delta: float) -> void:
 	if is_timing:
@@ -750,12 +402,6 @@ func _process(delta: float) -> void:
 			var mins = int(elapsed_time) / 60.0
 			var secs = int(elapsed_time) % 60
 			timer_label.text = "%02d:%02d" % [mins, secs]
-
-	_perf_update_timer += delta
-	if _perf_update_timer >= 1.0:
-		_perf_update_timer = 0.0
-		if latency_live_label:
-			latency_live_label.text = "%.0f" % SessionManager.get_avg_latency_ms()
 
 	super (delta)
 
@@ -778,6 +424,7 @@ func _process_camera(image: MediaPipeImage, timestamp_ms: int) -> void:
 		var now := Time.get_ticks_msec()
 		# Skip if a previous inference is still in flight (within timeout window).
 		if last_inference_ms >= 0 and now - last_inference_ms < Settings.inference_timeout_ms:
+			PerfStats.frame_skipped("inflight")
 			return
 		last_inference_ms = now
 		_last_camera_image = image
@@ -786,7 +433,11 @@ func _process_camera(image: MediaPipeImage, timestamp_ms: int) -> void:
 		# to match it, since all-17-points-collapsed-to-one-value output suggests
 		# the graph was receiving degenerate/blank image data via the Image path.
 		var packet := image.get_image_frame_packet()
-		packet.timestamp = timestamp_ms * 1000
+		var frame_id := timestamp_ms * 1000
+		packet.timestamp = frame_id
+		_latest_sent_id = frame_id
+		# Everything from the camera frame arriving up to this send is the "prep" stage
+		PerfStats.frame_sent(frame_id, _frame_arrive_us)
 		graph.send({"input_image": packet})
 
 func show_result(image: MediaPipeImage, landmarks: MediaPipeNormalizedLandmarks) -> void:
@@ -794,7 +445,8 @@ func show_result(image: MediaPipeImage, landmarks: MediaPipeNormalizedLandmarks)
 		return
 	var render_source := _get_preview_render_source(image)
 	var multi_landmarks: Array[MediaPipeNormalizedLandmarks] = []
-	if landmarks != null:
+	var is_in_calibration: bool = (get_parent() is CalibrationScreen) and (game_instance == null)
+	if landmarks != null and Settings.show_skeleton and not is_in_calibration:
 		multi_landmarks.append(landmarks)
 	var output_image := renderer.render(render_source, multi_landmarks)
 	var img := output_image.image
@@ -821,8 +473,11 @@ func _get_preview_render_source(image: MediaPipeImage) -> MediaPipeImage:
 	return image
 
 func _exit_tree() -> void:
-	super ()
+	_reset()
+	if ExerciseRecognizer.rep_completed.is_connected(_on_preview_rep):
+		ExerciseRecognizer.rep_completed.disconnect(_on_preview_rep)
 	GameManager.clear_active_game()
 	if game_instance:
 		game_instance.queue_free()
 		game_instance = null
+	super()

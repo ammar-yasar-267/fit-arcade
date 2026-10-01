@@ -60,7 +60,13 @@ static func _append_message_field(buffer: PackedByteArray, field_number: int, me
 	_append_varint(buffer, message_bytes.size())
 	buffer.append_array(message_bytes)
 
-func _init(model_path: String) -> void:
+## Which InferenceCalculator delegate to build. "nnapi" (hardware acceleration) exists
+## only on Android; everything else, and anyone who picked CPU in Settings, gets the
+## plain "tflite" CPU delegate.
+static func delegate_kind(os_name: String, use_hw_accel: bool) -> String:
+	return "nnapi" if (use_hw_accel and os_name == "Android") else "tflite"
+
+func _init(model_path: String, use_hw_accel: bool = true) -> void:
 	var builder := MediaPipeGraphBuilder.new()
 
 	var image_to_tensor := builder.add_node("ImageToTensorCalculator")
@@ -96,7 +102,8 @@ func _init(model_path: String) -> void:
 	# unset (no cache dir, accelerator chosen by NNAPI itself). Elsewhere (desktop
 	# dev builds), NNAPI isn't available, so fall back to the default TFLite CPU
 	# delegate used before this change.
-	if OS.get_name() == "Android":
+	# Settings > Hardware acceleration picks between the two (see delegate_kind()).
+	if delegate_kind(OS.get_name(), use_hw_accel) == "nnapi":
 		var nnapi_delegate := _make_proto("mediapipe.InferenceCalculatorOptions.Delegate.Nnapi")
 		inf_options.set_field("delegate/nnapi", nnapi_delegate)
 	else:

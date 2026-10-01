@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --color-ink: #0b0b0c;
+  --color-panel: #151517;
+  --color-line: #2a2a2e;
+  --color-dim: #8a8a92;
+  --color-volt: #d4ff3a;
+  --color-signal: #ff3b2f;
+  --color-cyan: #3ae0ff;
+  --color-flame: #ff8a1f;
+  --font-display: 'Anton', 'Impact', sans-serif;
+  --font-sans: 'Barlow', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@layer base {
+  html,
+  body {
+    background: #050506;
+    color: #f4f4f0;
+    font-family: var(--font-sans);
+  }
+  ::selection {
+    background: var(--color-volt);
+    color: var(--color-ink);
+  }
+}
+
+.stripes {
+  background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.05) 0 2px, transparent 2px 12px);
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+@keyframes pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  30% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}
+.animate-pop {
+  animation: pop 0.9s ease-out forwards;
+}
+@keyframes scroll-x {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.animate-bob {
+  animation: bob 1.2s ease-in-out infinite;
+}

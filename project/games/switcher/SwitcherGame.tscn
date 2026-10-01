@@ -1,4 +1,4 @@
-[gd_scene load_steps=3 format=3 uid="uid://cxabxt2j3v3v2"]
+[gd_scene load_steps=5 format=3 uid="uid://cxabxt2j3v3v2"]
 
 [ext_resource type="Script" uid="uid://cxabxt2ggh3" path="res://games/switcher/SwitcherGame.gd" id="1_switch"]
 [ext_resource type="PackedScene" uid="uid://cxv8q3bmnc7" path="res://ui/HUD.tscn" id="2_hud"]

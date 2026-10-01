@@ -20,7 +20,10 @@
       "Edit",
       "Read",
       "Glob",
-      "Grep"
+      "Grep",
+      "PowerShell(& \"C:\\\\Users\\\\Sami Naveed\\\\Downloads\\\\Godot_4.7.2\\\\Godot_v4.7.2-stable_win64.exe\" --headless --path $d --script $s)",
+      "Bash(python -)",
+      "PowerShell(& \"C:\\\\Users\\\\Sami Naveed\\\\Downloads\\\\Godot_4.7.2\\\\Godot_v4.7.2-stable_win64.exe\" --headless --path $d --script $s 2>&1)"
     ]
   }
 }

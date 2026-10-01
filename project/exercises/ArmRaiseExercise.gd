@@ -45,8 +45,8 @@ func process_frame(landmarks: MediaPipeNormalizedLandmarks, current_state: Exerc
 	var max_angle = max(left_angle, right_angle)
 	var min_angle = min(left_angle, right_angle)
 	var thresholds = _get_angle_thresholds()
-	var start_max = thresholds.get("start_max", 30.0)
-	var end_min = thresholds.get("end_min", 150.0)
+	var start_max = thresholds.get("start_max", 45.0)
+	var end_min = thresholds.get("end_min", 80.0)
 
 	# Both arms must be down for start, both must be raised for end
 	var is_start = max_angle <= start_max

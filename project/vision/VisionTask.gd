@@ -24,6 +24,7 @@ var min_frame_interval_ms := 33
 @onready var permission_dialog: AcceptDialog = $PermissionDialog
 
 func _exit_tree() -> void:
+	_reset()
 	if request:
 		request.cancel_request()
 		request = null
@@ -156,6 +157,28 @@ func _format_selected(index: int) -> void:
 	else:
 		select_camera_dialog.get_ok_button().disabled = true
 
+## Settings > "Mirror camera feed".
+##
+## Front cameras are captured already flipped (camera_texture.flip_h, set below), so the
+## preview behaves like a mirror, and pose detection runs on that same flipped image.
+## Changing the *capture* would swap detected left/right and break the lunge game, so
+## this setting only changes what is DRAWN: with mirror off, the preview texture is
+## flipped back. Mirror on (the default) is exactly how the preview always looked.
+static func preview_flip(capture_is_flipped: bool, mirror_enabled: bool) -> bool:
+	return capture_is_flipped and not mirror_enabled
+
+## The TextureRects that show the camera to the player. Subclasses add their own.
+func _preview_views() -> Array:
+	return [image_view]
+
+func _apply_preview_mirror() -> void:
+	if camera_texture == null:
+		return
+	var flip := preview_flip(camera_texture.flip_h, Settings.mirror_camera)
+	for view in _preview_views():
+		if view != null:
+			view.flip_h = flip
+
 func _start_camera() -> void:
 	if camera_feed == null:
 		return
@@ -163,6 +186,7 @@ func _start_camera() -> void:
 		camera_texture.flip_h = false
 	else:
 		camera_texture.flip_h = true
+	_apply_preview_mirror()
 	camera_feed.format_changed.connect(self._camera_format_changed, ConnectFlags.CONNECT_DEFERRED)
 	camera_feed.frame_changed.connect(self._camera_frame_changed, ConnectFlags.CONNECT_DEFERRED)
 	camera_feed.feed_is_active = true
@@ -247,13 +271,21 @@ func _camera_format_changed() -> void:
 	# reaches pose inference. No-op when rotation is 0 (size_rotated == frame_size).
 	camera_viewport.size = Vector2i(int(round(abs(size_rotated.x))), int(round(abs(size_rotated.y))))
 
+## When the camera frame currently being processed reached the app (microsecond clock).
+## PoseLandmarker uses it as the start of that frame's pipeline timing (see PerfStats).
+var _frame_arrive_us: int = 0
+
 func _camera_frame_changed() -> void:
 	if camera_texture == null:
 		return
+	var arrive_us := Time.get_ticks_usec()
+	PerfStats.frame_arrived(arrive_us)
 	if frame_capture_in_progress:
+		PerfStats.frame_skipped("busy")
 		return
 	var now_ms := Time.get_ticks_msec()
 	if now_ms - last_frame_ts_ms < min_frame_interval_ms:
+		PerfStats.frame_skipped("interval")
 		return
 	frame_capture_in_progress = true
 	await RenderingServer.frame_post_draw
@@ -287,6 +319,7 @@ func _camera_frame_changed() -> void:
 	img.set_image(infer_image)
 	last_frame_ts_ms = now_ms
 	frame_capture_in_progress = false
+	_frame_arrive_us = arrive_us
 	_camera_frame(img)
 
 func _camera_frame(image: MediaPipeImage) -> void:

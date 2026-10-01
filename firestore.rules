@@ -39,7 +39,8 @@ service cloud.firestore {
     match /profiles/{uid} {
       allow read: if true;
       allow create, update: if isSignedIn() && request.auth.uid == uid;
-      allow delete: if false;
+      // Players can delete their own profile (Settings > Delete account).
+      allow delete: if isSignedIn() && request.auth.uid == uid;
     }
 
     match /scores/{scoreId} {
@@ -50,7 +51,9 @@ service cloud.firestore {
         && request.resource.data.score >= 0
         && request.resource.data.score <= 1000000
         && isValidGameMode(request.resource.data.game_mode);
-      allow update, delete: if false;
+      allow update: if false;
+      // Only the owner can remove their own run history (account deletion).
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
     match /best_scores/{docId} {
@@ -70,7 +73,10 @@ service cloud.firestore {
         && request.resource.data.score is int
         && request.resource.data.score > resource.data.score
         && request.resource.data.score <= 1000000;
-      allow delete: if false;
+      // Keyed on the document id ({uid}_{mode}) rather than resource.data, so
+      // deleting a row that doesn't exist yet (e.g. a mode never played) isn't
+      // rejected and doesn't fail the whole atomic account-deletion commit.
+      allow delete: if isSignedIn() && docId.split('_')[0] == request.auth.uid;
     }
   }
 }

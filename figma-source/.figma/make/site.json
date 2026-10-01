@@ -1,0 +1,10 @@
+{
+  "description": "Engage in fun, competitive workouts with FitArcade, a mobile exergaming platform that transforms body movements into interactive arcade games, making fitness enjoyable.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

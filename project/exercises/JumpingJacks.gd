@@ -25,23 +25,37 @@ func process_frame(landmarks: MediaPipeNormalizedLandmarks, current_state: Exerc
 	var left_low = l_ankle if l_ankle != Vector3.ZERO else l_knee
 	var right_low = r_ankle if r_ankle != Vector3.ZERO else r_knee
 		
-	# Arm angle (using max of both arms to be generous)
-	var l_arm_angle = calculate_angle(l_hip, l_shoulder, l_wrist)
-	var r_arm_angle = calculate_angle(r_hip, r_shoulder, r_wrist)
-	var arm_angle = max(l_arm_angle, r_arm_angle)
+	# Fallback to elbows if wrists are missing
+	var l_hand = l_wrist if l_wrist != Vector3.ZERO else get_landmark_pos(landmarks, PoseKeypoints.LEFT_ELBOW)
+	var r_hand = r_wrist if r_wrist != Vector3.ZERO else get_landmark_pos(landmarks, PoseKeypoints.RIGHT_ELBOW)
+	if l_hand == Vector3.ZERO or r_hand == Vector3.ZERO or l_shoulder == Vector3.ZERO or r_shoulder == Vector3.ZERO:
+		return current_state
+		
+	# Arm angles for both arms
+	var l_arm_angle = calculate_angle(l_hip, l_shoulder, l_hand)
+	var r_arm_angle = calculate_angle(r_hip, r_shoulder, r_hand)
+	var max_arm_angle = max(l_arm_angle, r_arm_angle)
 	
-	# Leg angle (angle between left leg-low, hip center, right leg-low)
+	# Leg metrics: angle and spread ratio relative to hip width
 	var hip_center = Vector3((l_hip.x + r_hip.x) / 2.0, (l_hip.y + r_hip.y) / 2.0, 0)
 	var leg_angle = calculate_angle(left_low, hip_center, right_low)
+	var hip_width = abs(l_hip.x - r_hip.x)
+	var leg_spread = abs(left_low.x - right_low.x)
+	var spread_ratio = leg_spread / maxf(hip_width, 0.001) if hip_width > 0.01 else 1.0
 	
-	# Start: arms down at sides (angle < 60 degrees)
-	var is_start = arm_angle < 60.0
-	# End: arms raised (angle > 120 degrees) and legs spread (angle > 20 degrees)
-	var is_end = arm_angle > 120.0 and leg_angle > 20.0
+	# Start: arms down at sides AND legs together
+	var arms_down = l_arm_angle < 55.0 and r_arm_angle < 55.0
+	var legs_together = leg_angle < 22.0 or spread_ratio < 1.35
+	var is_start = arms_down and legs_together
+
+	# End: both arms raised overhead AND legs jumped wide
+	var arms_up = l_arm_angle > 90.0 and r_arm_angle > 90.0 and max_arm_angle > 115.0
+	var legs_spread = leg_angle > 26.0 and spread_ratio > 1.45
+	var is_end = arms_up and legs_spread
 	
 	frame_counter += 1
 	if frame_counter % 15 == 0:
-		print("JJ Debug | Arm Angle: %3.1f | Leg Angle: %3.1f" % [arm_angle, leg_angle])
+		print("JJ Debug | Arms: L=%.1f R=%.1f | Leg Angle: %.1f | SpreadRatio: %.2f | start=%s end=%s" % [l_arm_angle, r_arm_angle, leg_angle, spread_ratio, str(is_start), str(is_end)])
 	
 	match current_state:
 		ExerciseRecognizer.State.IDLE, ExerciseRecognizer.State.REP_COUNTED, ExerciseRecognizer.State.INVALID:
