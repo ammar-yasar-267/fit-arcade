@@ -38,3 +38,13 @@ func _on_state_changed(new_state: State):
 	elif new_state == State.INVALID:
 		emit_signal("form_feedback", "Form broken, resetting", false)
 		current_state = State.IDLE # Reset to idle
+
+## Simulates a completed rep for testing/keyboard fallback
+func trigger_debug_rep(extra_data: Dictionary = {}) -> void:
+	if current_exercise and extra_data.has("lunge_side"):
+		current_exercise.set("lunge_side", extra_data["lunge_side"])
+	SessionManager.add_rep()
+	emit_signal("rep_completed")
+	emit_signal("form_feedback", "Great form!", true)
+	current_state = State.IDLE
+

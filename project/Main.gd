@@ -114,6 +114,8 @@ func _on_onboarding_completed() -> void:
 func _on_hub_mode_picked(picked_mode: String) -> void:
 	mode_id = picked_mode
 	run += 1
+	if get_tree().root.has_node("SessionManager"):
+		SessionManager.set_last_played_mode(picked_mode)
 	show_screen("calibrate")
 
 func _on_hub_nav_requested(screen_name: String) -> void:

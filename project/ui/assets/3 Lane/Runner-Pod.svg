@@ -1,51 +1,80 @@
 <svg width="80" height="100" viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
-      <feGaussianBlur stdDeviation="2" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-    <filter id="thrustGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="4" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
+    <!-- Cyan Cyber Chassis Gradient -->
+    <linearGradient id="cyanChassis" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E0FBFF"/>
+      <stop offset="30%" stop-color="#3AE0FF"/>
+      <stop offset="75%" stop-color="#00A2C7"/>
+      <stop offset="100%" stop-color="#00627A"/>
+    </linearGradient>
+
+    <!-- Cockpit Visor Gradient -->
+    <linearGradient id="cockpitVisor" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="40%" stop-color="#A5F3FC"/>
+      <stop offset="100%" stop-color="#0891B2"/>
+    </linearGradient>
+
+    <!-- Carbon Fiber Armor -->
+    <linearGradient id="carbonBody" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#242731"/>
+      <stop offset="100%" stop-color="#0D0E13"/>
+    </linearGradient>
+
+    <!-- Dual Thruster Hot Plasma -->
+    <linearGradient id="ionFlame" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="35%" stop-color="#3AE0FF"/>
+      <stop offset="75%" stop-color="#0284C7"/>
+      <stop offset="100%" stop-color="#0284C7" stop-opacity="0"/>
+    </linearGradient>
   </defs>
 
-  <ellipse cx="40" cy="97" rx="20" ry="10" fill="#7C3AED" opacity="0.25" filter="url(#thrustGlow)"/>
-  <ellipse cx="40" cy="94" rx="14" ry="8" fill="#7C3AED" opacity="0.45"/>
-  <ellipse cx="40" cy="91" rx="9" ry="6" fill="#A78BFA" opacity="0.65" filter="url(#glow)"/>
-  <ellipse cx="40" cy="89" rx="5" ry="3.5" fill="#C4B5FD" opacity="0.8"/>
-  <ellipse cx="40" cy="88" rx="2.5" ry="2" fill="#FFFFFF" opacity="0.7"/>
+  <!-- Ambient Under-Glow Halo -->
+  <ellipse cx="40" cy="54" rx="36" ry="38" fill="#3AE0FF" opacity="0.16"/>
 
-  <polygon points="2,68 24,42 24,74" fill="#0EA5E9" opacity="0.85"/>
-  <polygon points="6,66 24,46 24,72" fill="#67E8F9" opacity="0.2"/>
-  <line x1="2" y1="68" x2="24" y2="42" stroke="#67E8F9" stroke-width="1.5" opacity="0.5"/>
+  <!-- Twin Ion Thruster Plumes -->
+  <polygon points="21,78 25,98 17,98" fill="url(#ionFlame)"/>
+  <polygon points="21,78 23,93 19,93" fill="#FFFFFF" opacity="0.8"/>
 
-  <polygon points="78,68 56,42 56,74" fill="#0EA5E9" opacity="0.85"/>
-  <polygon points="74,66 56,46 56,72" fill="#67E8F9" opacity="0.2"/>
-  <line x1="78" y1="68" x2="56" y2="42" stroke="#67E8F9" stroke-width="1.5" opacity="0.5"/>
+  <polygon points="59,78 63,98 55,98" fill="url(#ionFlame)"/>
+  <polygon points="59,78 61,93 57,93" fill="#FFFFFF" opacity="0.8"/>
 
-  <ellipse cx="40" cy="48" rx="22" ry="34" fill="#06B6D4" filter="url(#glow)"/>
-  <ellipse cx="32" cy="36" rx="10" ry="18" fill="#FFFFFF" opacity="0.09"/>
+  <!-- Left Aerodynamic Swept Wing -->
+  <polygon points="4,66 26,38 28,74" fill="url(#carbonBody)" stroke="#3AE0FF" stroke-width="1.2"/>
+  <polygon points="8,64 24,42 26,70" fill="url(#cyanChassis)" opacity="0.85"/>
+  <polygon points="2,66 12,52 14,68" fill="#3AE0FF"/>
 
-  <ellipse cx="40" cy="30" rx="12" ry="14" fill="#0C1A2E"/>
-  <ellipse cx="40" cy="30" rx="12" ry="14" fill="none" stroke="#67E8F9" stroke-width="2.5" filter="url(#glow)"/>
-  <ellipse cx="40" cy="30" rx="9" ry="11" fill="#0EA5E9" opacity="0.15"/>
-  <ellipse cx="35" cy="24" rx="4" ry="6" fill="#FFFFFF" opacity="0.08"/>
+  <!-- Right Aerodynamic Swept Wing -->
+  <polygon points="76,66 54,38 52,74" fill="url(#carbonBody)" stroke="#3AE0FF" stroke-width="1.2"/>
+  <polygon points="72,64 56,42 54,70" fill="url(#cyanChassis)" opacity="0.85"/>
+  <polygon points="78,66 68,52 66,68" fill="#3AE0FF"/>
 
-  <polygon points="40,4 45,22 35,22" fill="#0EA5E9" filter="url(#glow)"/>
-  <polygon points="40,8 43,22 37,22" fill="#67E8F9" opacity="0.4"/>
+  <!-- Central Hover Hull (Stealth Diamond Fuselage) -->
+  <polygon points="40,6 62,44 54,80 26,80 18,44" fill="url(#carbonBody)" stroke="#3AE0FF" stroke-width="1.5"/>
 
-  <rect x="18" y="62" width="10" height="18" rx="5" fill="#0EA5E9" filter="url(#glow)"/>
-  <rect x="52" y="62" width="10" height="18" rx="5" fill="#0EA5E9" filter="url(#glow)"/>
+  <!-- Cyan Flank Armor Plates -->
+  <polygon points="22,46 32,32 32,74 24,76" fill="url(#cyanChassis)"/>
+  <polygon points="58,46 48,32 48,74 56,76" fill="url(#cyanChassis)"/>
 
-  <ellipse cx="23" cy="80" rx="7" ry="4" fill="#7C3AED" opacity="0.55" filter="url(#thrustGlow)"/>
-  <ellipse cx="57" cy="80" rx="7" ry="4" fill="#7C3AED" opacity="0.55" filter="url(#thrustGlow)"/>
+  <!-- Nose Cone Laser Fin -->
+  <polygon points="40,8 43,26 37,26" fill="#FFFFFF"/>
+  <polygon points="40,6 44,28 36,28" fill="url(#cyanChassis)" opacity="0.9"/>
 
-  <path d="M 22 52 Q 40 58 58 52" stroke="#67E8F9" stroke-width="1.5" fill="none" opacity="0.35"/>
+  <!-- Pilot Cockpit Canopy (Gleaming Cyan Visor) -->
+  <polygon points="40,24 50,48 40,58 30,48" fill="url(#cockpitVisor)" stroke="#FFFFFF" stroke-width="1"/>
+  <ellipse cx="37" cy="36" rx="4" ry="7" fill="#FFFFFF" opacity="0.75" transform="rotate(-15 37 36)"/>
+
+  <!-- Engine Cowling Exhaust Housings -->
+  <rect x="16" y="70" width="10" height="12" rx="3" fill="#15171F" stroke="#3AE0FF" stroke-width="1.2"/>
+  <rect x="54" y="70" width="10" height="12" rx="3" fill="#15171F" stroke="#3AE0FF" stroke-width="1.2"/>
+
+  <!-- High-Tech Neon Circuit Decals -->
+  <line x1="32" y1="62" x2="48" y2="62" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="40" cy="62" r="2.2" fill="#3AE0FF"/>
+  <line x1="40" y1="62" x2="40" y2="76" stroke="#3AE0FF" stroke-width="1.5"/>
+
+  <!-- Wingtip Strobe Beacons -->
+  <circle cx="3" cy="66" r="2" fill="#FFFFFF"/>
+  <circle cx="77" cy="66" r="2" fill="#FFFFFF"/>
 </svg>

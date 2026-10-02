@@ -52,8 +52,8 @@ class TopGradientBg extends TextureRect:
 		# Gradient.new() already holds a black->white pair; setting the arrays replaces
 		# it outright (adding points on top left an opaque white stop at the bottom).
 		var grad := Gradient.new()
-		# Stays dense through the score row (y~175 of 230), then fades out.
-		grad.offsets = PackedFloat32Array([0.0, 0.8 if solid else 0.65, 1.0])
+		# Stays dense through the score row and status sub-bar, then fades out.
+		grad.offsets = PackedFloat32Array([0.0, 0.82 if solid else 0.72, 1.0])
 		grad.colors = PackedColorArray([
 			Color(Tokens.INK.r, Tokens.INK.g, Tokens.INK.b, 1.0),
 			Color(Tokens.INK.r, Tokens.INK.g, Tokens.INK.b, 1.0 if solid else 0.85),
@@ -66,7 +66,7 @@ class TopGradientBg extends TextureRect:
 		tex.fill_from = Vector2(0.5, 0.0)
 		tex.fill_to = Vector2(0.5, 1.0)
 		tex.width = 16
-		tex.height = 230
+		tex.height = 255
 		texture = tex
 
 
@@ -277,6 +277,11 @@ var _rep_label: Label
 var _time_label: Label
 var _score_label: Label
 var _progress_bar: SessionProgressBar
+var _status_row: HBoxContainer
+var _shield_pips_container: HBoxContainer
+var _shield_pips: Array[PanelContainer] = []
+var _hud_combo_box: PanelContainer
+var _hud_combo_label: Label
 var _primed_overlay: Control
 var _primed_action_bob: Control
 var _primed_dot: ColorRect
@@ -343,15 +348,34 @@ func _ready() -> void:
 	if active_game:
 		bind_game(active_game)
 
-	_update_labels()
+func _enter_tree() -> void:
+	if not ExerciseRecognizer.rep_completed.is_connected(_on_rep):
+		ExerciseRecognizer.rep_completed.connect(_on_rep)
+	if not ExerciseRecognizer.form_feedback.is_connected(_on_form_feedback):
+		ExerciseRecognizer.form_feedback.connect(_on_form_feedback)
 
 func bind_game(game: GameBase) -> void:
+	if not ExerciseRecognizer.rep_completed.is_connected(_on_rep):
+		ExerciseRecognizer.rep_completed.connect(_on_rep)
+	if not ExerciseRecognizer.form_feedback.is_connected(_on_form_feedback):
+		ExerciseRecognizer.form_feedback.connect(_on_form_feedback)
+
 	if game == null:
 		return
 	if not game.game_over.is_connected(_on_game_over):
 		game.game_over.connect(_on_game_over)
 	if not game.score_changed.is_connected(update_score):
 		game.score_changed.connect(update_score)
+	if game.has_signal("shields_changed"):
+		if not game.shields_changed.is_connected(update_shields):
+			game.shields_changed.connect(update_shields)
+	if game.has_signal("combo_changed"):
+		if not game.combo_changed.is_connected(update_combo):
+			game.combo_changed.connect(update_combo)
+	if "shields" in game:
+		update_shields(game.shields, game.get("MAX_SHIELDS") if "MAX_SHIELDS" in game else 3)
+	if "combo" in game:
+		update_combo(game.combo)
 
 func _exit_tree() -> void:
 	if ExerciseRecognizer.rep_completed.is_connected(_on_rep):
@@ -364,6 +388,10 @@ func _exit_tree() -> void:
 			active_game.game_over.disconnect(_on_game_over)
 		if active_game.score_changed.is_connected(update_score):
 			active_game.score_changed.disconnect(update_score)
+		if active_game.has_signal("shields_changed") and active_game.shields_changed.is_connected(update_shields):
+			active_game.shields_changed.disconnect(update_shields)
+		if active_game.has_signal("combo_changed") and active_game.combo_changed.is_connected(update_combo):
+			active_game.combo_changed.disconnect(update_combo)
 
 func _process(delta: float) -> void:
 	if is_paused or is_finishing:
@@ -408,6 +436,24 @@ func _unhandled_input(event: InputEvent) -> void:
 		toggle_pause()
 		get_viewport().set_input_as_handled()
 		return
+
+	# Fallback Keyboard Controls for Testing:
+	# Space, Up Arrow, W, Enter for vertical rep games (Flappy Bird, Dino Runner)
+	# Left Arrow, A, Right Arrow, D for lane switcher
+	if event is InputEventKey and event.pressed and not event.echo:
+		if not is_paused:
+			if event.keycode in [KEY_SPACE, KEY_UP, KEY_W, KEY_ENTER]:
+				ExerciseRecognizer.trigger_debug_rep()
+				get_viewport().set_input_as_handled()
+				return
+			elif event.keycode in [KEY_LEFT, KEY_A]:
+				ExerciseRecognizer.trigger_debug_rep({"lunge_side": 0})
+				get_viewport().set_input_as_handled()
+				return
+			elif event.keycode in [KEY_RIGHT, KEY_D]:
+				ExerciseRecognizer.trigger_debug_rep({"lunge_side": 1})
+				get_viewport().set_input_as_handled()
+				return
 
 	# Tap anywhere on screen to pause
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -619,7 +665,7 @@ func _build_top_hud() -> void:
 
 	var grad_bg := TopGradientBg.new(_high_contrast)
 	grad_bg.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	grad_bg.offset_bottom = 230
+	grad_bg.offset_bottom = 255
 	_root_ctrl.add_child(grad_bg)
 
 	_top_bar = MarginContainer.new()
@@ -687,6 +733,153 @@ func _build_top_hud() -> void:
 	_progress_bar.offset_left = Tokens.SCREEN_PADDING_LEFT
 	_progress_bar.offset_right = -Tokens.SCREEN_PADDING_RIGHT
 	_root_ctrl.add_child(_progress_bar)
+
+	# Status Sub-Bar: Shields / Lives (Left) & Combo Multiplier (Right)
+	_build_status_subbar()
+
+func _build_status_subbar() -> void:
+	_status_row = HBoxContainer.new()
+	_status_row.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_status_row.offset_top = _progress_bar.offset_bottom + 8
+	_status_row.offset_bottom = _status_row.offset_top + 22
+	_status_row.offset_left = Tokens.SCREEN_PADDING_LEFT
+	_status_row.offset_right = -Tokens.SCREEN_PADDING_RIGHT
+	_status_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root_ctrl.add_child(_status_row)
+
+	# Left: Shields Pill Widget
+	var shield_widget := HBoxContainer.new()
+	shield_widget.add_theme_constant_override("separation", 8)
+	shield_widget.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_status_row.add_child(shield_widget)
+
+	var shield_lbl := Label.new()
+	shield_lbl.text = "SHIELDS"
+	shield_lbl.add_theme_font_override("font", Tokens.FONT_MONO)
+	shield_lbl.add_theme_font_size_override("font_size", 10)
+	shield_lbl.add_theme_color_override("font_color", Tokens.WHITE if _high_contrast else Color(Tokens.TEXT.r, Tokens.TEXT.g, Tokens.TEXT.b, 0.72))
+	shield_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_legible(shield_lbl, 2)
+	shield_widget.add_child(shield_lbl)
+
+	_shield_pips_container = HBoxContainer.new()
+	_shield_pips_container.add_theme_constant_override("separation", 6)
+	_shield_pips_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	shield_widget.add_child(_shield_pips_container)
+
+	_shield_pips.clear()
+	for i in range(3):
+		var pip := _create_shield_pip(true)
+		_shield_pips_container.add_child(pip)
+		_shield_pips.append(pip)
+
+	# Middle Spacer
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_status_row.add_child(spacer)
+
+	# Right: Combo Multiplier Badge (hidden by default)
+	_hud_combo_box = PanelContainer.new()
+	_hud_combo_box.visible = false
+	_hud_combo_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var combo_sb := StyleBoxFlat.new()
+	combo_sb.bg_color = Color(Tokens.INK.r, Tokens.INK.g, Tokens.INK.b, 0.92)
+	combo_sb.border_width_left = 1
+	combo_sb.border_width_top = 1
+	combo_sb.border_width_right = 1
+	combo_sb.border_width_bottom = 1
+	combo_sb.border_color = _mode_color
+	combo_sb.corner_radius_top_left = 3
+	combo_sb.corner_radius_top_right = 3
+	combo_sb.corner_radius_bottom_left = 3
+	combo_sb.corner_radius_bottom_right = 3
+	combo_sb.content_margin_left = 8
+	combo_sb.content_margin_right = 8
+	combo_sb.content_margin_top = 2
+	combo_sb.content_margin_bottom = 2
+	_hud_combo_box.add_theme_stylebox_override("panel", combo_sb)
+	_status_row.add_child(_hud_combo_box)
+
+	_hud_combo_label = Label.new()
+	_hud_combo_label.text = "2x COMBO"
+	_hud_combo_label.add_theme_font_override("font", Tokens.FONT_DISPLAY)
+	_hud_combo_label.add_theme_font_size_override("font_size", 14)
+	_hud_combo_label.add_theme_color_override("font_color", _mode_color)
+	_hud_combo_box.add_child(_hud_combo_label)
+
+func _create_shield_pip(active: bool) -> PanelContainer:
+	var pip := PanelContainer.new()
+	pip.custom_minimum_size = Vector2(28, 8)
+	pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.corner_radius_top_left = 2
+	sb.corner_radius_top_right = 2
+	sb.corner_radius_bottom_left = 2
+	sb.corner_radius_bottom_right = 2
+	if active:
+		sb.bg_color = _mode_color
+		sb.border_width_top = 1
+		sb.border_color = Tokens.WHITE
+	else:
+		sb.bg_color = Tokens.BAR_ZERO
+		sb.border_width_left = 1
+		sb.border_width_top = 1
+		sb.border_width_right = 1
+		sb.border_width_bottom = 1
+		sb.border_color = Tokens.LINE
+	pip.add_theme_stylebox_override("panel", sb)
+	return pip
+
+func update_shields(current: int, max_val: int = 3) -> void:
+	if _shield_pips_container == null:
+		return
+	while _shield_pips.size() < max_val:
+		var pip := _create_shield_pip(true)
+		_shield_pips_container.add_child(pip)
+		_shield_pips.append(pip)
+
+	for i in range(_shield_pips.size()):
+		var pip = _shield_pips[i]
+		var is_active := i < current
+		var sb := StyleBoxFlat.new()
+		sb.corner_radius_top_left = 2
+		sb.corner_radius_top_right = 2
+		sb.corner_radius_bottom_left = 2
+		sb.corner_radius_bottom_right = 2
+		if is_active:
+			sb.bg_color = _mode_color
+			sb.border_width_top = 1
+			sb.border_color = Tokens.WHITE
+			pip.modulate.a = 1.0
+		else:
+			sb.bg_color = Tokens.BAR_ZERO
+			sb.border_width_left = 1
+			sb.border_width_top = 1
+			sb.border_width_right = 1
+			sb.border_width_bottom = 1
+			sb.border_color = Tokens.LINE
+			pip.modulate.a = 0.5
+		pip.add_theme_stylebox_override("panel", sb)
+
+	# Warning pulse on last shield
+	if current == 1:
+		var first_pip = _shield_pips[0]
+		var tw := create_tween()
+		tw.tween_property(first_pip, "modulate:a", 0.4, 0.15)
+		tw.tween_property(first_pip, "modulate:a", 1.0, 0.15)
+
+func update_combo(combo_val: int) -> void:
+	if not _hud_combo_box or not _hud_combo_label:
+		return
+	if combo_val >= 2:
+		_hud_combo_box.visible = true
+		_hud_combo_label.text = "%dx COMBO" % combo_val
+		_hud_combo_box.scale = Vector2(1.25, 1.25)
+		var tw := create_tween()
+		tw.tween_property(_hud_combo_box, "scale", Vector2.ONE, 0.2).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	else:
+		_hud_combo_box.visible = false
 
 func _make_stat_caption(text: String, align: HorizontalAlignment) -> Label:
 	var lbl := Label.new()
@@ -942,21 +1135,246 @@ func _build_game_cues() -> void:
 		lane_box.add_child(r_lbl)
 
 	elif _mode_id == "flappy":
-		# Flappy Flight: "▲ RAISE ARMS TO RISE" (bottom 40, left 16). offset_top has to be
-		# set too: with a bottom anchor and offset_top left at 0, the label's top edge sat
-		# at the screen's bottom edge and the whole hint rendered off-screen.
-		var flappy_lbl := Label.new()
-		flappy_lbl.text = "▲ RAISE ARMS TO RISE"
-		flappy_lbl.add_theme_font_override("font", Tokens.FONT_DISPLAY)
-		flappy_lbl.add_theme_font_size_override("font_size", 18)
-		flappy_lbl.add_theme_color_override("font_color", Color(Tokens.FLAME.r, Tokens.FLAME.g, Tokens.FLAME.b, 1.0 if _high_contrast else 0.95))
-		_legible(flappy_lbl, 4)
-		flappy_lbl.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-		flappy_lbl.offset_left = 16
-		flappy_lbl.offset_bottom = -40
-		flappy_lbl.offset_top = -40 - ceilf(Tokens.FONT_DISPLAY.get_height(18))
-		flappy_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_root_ctrl.add_child(flappy_lbl)
+		# Flappy Flight: Cyber Action Pill (bottom 32, left 16)
+		# Styled as a sleek translucent dark panel with a neon FLAME border,
+		# an icon badge chip, and high-contrast white + flame typography.
+		var badge_pill := PanelContainer.new()
+		badge_pill.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+		badge_pill.offset_left = 16
+		badge_pill.offset_bottom = -32
+		badge_pill.offset_top = -68
+		badge_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+		var pill_style := StyleBoxFlat.new()
+		pill_style.bg_color = Color(0.04, 0.04, 0.07, 0.92)
+		pill_style.border_width_left = 1
+		pill_style.border_width_top = 1
+		pill_style.border_width_right = 1
+		pill_style.border_width_bottom = 1
+		pill_style.border_color = Color(Tokens.FLAME.r, Tokens.FLAME.g, Tokens.FLAME.b, 0.65 if not _high_contrast else 1.0)
+		pill_style.corner_radius_top_left = 4
+		pill_style.corner_radius_top_right = 4
+		pill_style.corner_radius_bottom_left = 4
+		pill_style.corner_radius_bottom_right = 4
+		pill_style.content_margin_left = 8
+		pill_style.content_margin_right = 14
+		pill_style.content_margin_top = 5
+		pill_style.content_margin_bottom = 5
+		badge_pill.add_theme_stylebox_override("panel", pill_style)
+		_root_ctrl.add_child(badge_pill)
+
+		var hbox := HBoxContainer.new()
+		hbox.add_theme_constant_override("separation", 10)
+		hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		badge_pill.add_child(hbox)
+
+		# Action Icon Chip: 22x22 solid FLAME square with dark arrow
+		var icon_box := PanelContainer.new()
+		icon_box.custom_minimum_size = Vector2(22, 22)
+		var icon_style := StyleBoxFlat.new()
+		icon_style.bg_color = Tokens.FLAME
+		icon_style.corner_radius_top_left = 3
+		icon_style.corner_radius_top_right = 3
+		icon_style.corner_radius_bottom_left = 3
+		icon_style.corner_radius_bottom_right = 3
+		icon_box.add_theme_stylebox_override("panel", icon_style)
+		icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hbox.add_child(icon_box)
+
+		var arrow_lbl := Label.new()
+		arrow_lbl.text = "▲"
+		arrow_lbl.add_theme_font_override("font", Tokens.FONT_DISPLAY)
+		arrow_lbl.add_theme_font_size_override("font_size", 13)
+		arrow_lbl.add_theme_color_override("font_color", Tokens.INK)
+		arrow_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		arrow_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		arrow_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon_box.add_child(arrow_lbl)
+
+		# Typography: "RAISE ARMS" (White) + "TO RISE" (Flame)
+		var text_hbox := HBoxContainer.new()
+		text_hbox.add_theme_constant_override("separation", 6)
+		text_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hbox.add_child(text_hbox)
+
+		var raise_lbl := Label.new()
+		raise_lbl.text = "RAISE ARMS"
+		raise_lbl.add_theme_font_override("font", Tokens.FONT_DISPLAY)
+		raise_lbl.add_theme_font_size_override("font_size", 17)
+		raise_lbl.add_theme_color_override("font_color", Tokens.WHITE)
+		_legible(raise_lbl, 2)
+		raise_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		text_hbox.add_child(raise_lbl)
+
+		var to_rise_lbl := Label.new()
+		to_rise_lbl.text = "TO RISE"
+		to_rise_lbl.add_theme_font_override("font", Tokens.FONT_DISPLAY)
+		to_rise_lbl.add_theme_font_size_override("font_size", 17)
+		to_rise_lbl.add_theme_color_override("font_color", Tokens.FLAME)
+		_legible(to_rise_lbl, 2)
+		to_rise_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		text_hbox.add_child(to_rise_lbl)
+
+	elif _mode_id == "dino":
+		# Dino Runner: Cyber Action Pill (bottom 32, left 16)
+		var badge_pill := PanelContainer.new()
+		badge_pill.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+		badge_pill.offset_left = 16
+		badge_pill.offset_bottom = -32
+		badge_pill.offset_top = -68
+		badge_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+		var pill_style := StyleBoxFlat.new()
+		pill_style.bg_color = Color(0.04, 0.04, 0.07, 0.92)
+		pill_style.border_width_left = 1
+		pill_style.border_width_top = 1
+		pill_style.border_width_right = 1
+		pill_style.border_width_bottom = 1
+		pill_style.border_color = Color(Tokens.VOLT.r, Tokens.VOLT.g, Tokens.VOLT.b, 0.65 if not _high_contrast else 1.0)
+		pill_style.corner_radius_top_left = 4
+		pill_style.corner_radius_top_right = 4
+		pill_style.corner_radius_bottom_left = 4
+		pill_style.corner_radius_bottom_right = 4
+		pill_style.content_margin_left = 8
+		pill_style.content_margin_right = 14
+		pill_style.content_margin_top = 5
+		pill_style.content_margin_bottom = 5
+		badge_pill.add_theme_stylebox_override("panel", pill_style)
+		_root_ctrl.add_child(badge_pill)
+
+		var hbox := HBoxContainer.new()
+		hbox.add_theme_constant_override("separation", 10)
+		hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		badge_pill.add_child(hbox)
+
+		# Action Icon Chip: 22x22 solid VOLT square with dark arrow
+		var icon_box := PanelContainer.new()
+		icon_box.custom_minimum_size = Vector2(22, 22)
+		var icon_style := StyleBoxFlat.new()
+		icon_style.bg_color = Tokens.VOLT
+		icon_style.corner_radius_top_left = 3
+		icon_style.corner_radius_top_right = 3
+		icon_style.corner_radius_bottom_left = 3
+		icon_style.corner_radius_bottom_right = 3
+		icon_box.add_theme_stylebox_override("panel", icon_style)
+		icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hbox.add_child(icon_box)
+
+		var arrow_lbl := Label.new()
+		arrow_lbl.text = "▲"
+		arrow_lbl.add_theme_font_override("font", Tokens.FONT_DISPLAY)
+		arrow_lbl.add_theme_font_size_override("font_size", 13)
+		arrow_lbl.add_theme_color_override("font_color", Tokens.INK)
+		arrow_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		arrow_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		arrow_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon_box.add_child(arrow_lbl)
+
+		# Typography: "JACK" (White) + "TO JUMP" (Volt)
+		var text_hbox := HBoxContainer.new()
+		text_hbox.add_theme_constant_override("separation", 6)
+		text_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hbox.add_child(text_hbox)
+
+		var jack_lbl := Label.new()
+		jack_lbl.text = "JACK"
+		jack_lbl.add_theme_font_override("font", Tokens.FONT_DISPLAY)
+		jack_lbl.add_theme_font_size_override("font_size", 17)
+		jack_lbl.add_theme_color_override("font_color", Tokens.WHITE)
+		_legible(jack_lbl, 2)
+		jack_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		text_hbox.add_child(jack_lbl)
+
+		var to_jump_lbl := Label.new()
+		to_jump_lbl.text = "TO JUMP"
+		to_jump_lbl.add_theme_font_override("font", Tokens.FONT_DISPLAY)
+		to_jump_lbl.add_theme_font_size_override("font_size", 17)
+		to_jump_lbl.add_theme_color_override("font_color", Tokens.VOLT)
+		_legible(to_jump_lbl, 2)
+		to_jump_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		text_hbox.add_child(to_jump_lbl)
+
+	elif _mode_id in ["lane", "switcher"]:
+		# Lane Switcher: Cyber Action Pill (bottom 32, left 16)
+		var badge_pill := PanelContainer.new()
+		badge_pill.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+		badge_pill.offset_left = 16
+		badge_pill.offset_bottom = -32
+		badge_pill.offset_top = -68
+		badge_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+		var pill_style := StyleBoxFlat.new()
+		pill_style.bg_color = Color(0.04, 0.04, 0.07, 0.92)
+		pill_style.border_width_left = 1
+		pill_style.border_width_top = 1
+		pill_style.border_width_right = 1
+		pill_style.border_width_bottom = 1
+		pill_style.border_color = Color(Tokens.CYAN.r, Tokens.CYAN.g, Tokens.CYAN.b, 0.65 if not _high_contrast else 1.0)
+		pill_style.corner_radius_top_left = 4
+		pill_style.corner_radius_top_right = 4
+		pill_style.corner_radius_bottom_left = 4
+		pill_style.corner_radius_bottom_right = 4
+		pill_style.content_margin_left = 8
+		pill_style.content_margin_right = 14
+		pill_style.content_margin_top = 5
+		pill_style.content_margin_bottom = 5
+		badge_pill.add_theme_stylebox_override("panel", pill_style)
+		_root_ctrl.add_child(badge_pill)
+
+		var hbox := HBoxContainer.new()
+		hbox.add_theme_constant_override("separation", 10)
+		hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		badge_pill.add_child(hbox)
+
+		# Action Icon Chip: 28x22 solid CYAN pill with dark arrows ◀ ▶
+		var icon_box := PanelContainer.new()
+		icon_box.custom_minimum_size = Vector2(28, 22)
+		var icon_style := StyleBoxFlat.new()
+		icon_style.bg_color = Tokens.CYAN
+		icon_style.corner_radius_top_left = 3
+		icon_style.corner_radius_top_right = 3
+		icon_style.corner_radius_bottom_left = 3
+		icon_style.corner_radius_bottom_right = 3
+		icon_box.add_theme_stylebox_override("panel", icon_style)
+		icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hbox.add_child(icon_box)
+
+		var arrow_lbl := Label.new()
+		arrow_lbl.text = "◀ ▶"
+		arrow_lbl.add_theme_font_override("font", Tokens.FONT_DISPLAY)
+		arrow_lbl.add_theme_font_size_override("font_size", 12)
+		arrow_lbl.add_theme_color_override("font_color", Tokens.INK)
+		arrow_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		arrow_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		arrow_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon_box.add_child(arrow_lbl)
+
+		# Typography: "LUNGE" (White) + "TO SWITCH" (Cyan)
+		var text_hbox := HBoxContainer.new()
+		text_hbox.add_theme_constant_override("separation", 6)
+		text_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hbox.add_child(text_hbox)
+
+		var lunge_lbl := Label.new()
+		lunge_lbl.text = "LUNGE"
+		lunge_lbl.add_theme_font_override("font", Tokens.FONT_DISPLAY)
+		lunge_lbl.add_theme_font_size_override("font_size", 17)
+		lunge_lbl.add_theme_color_override("font_color", Tokens.WHITE)
+		_legible(lunge_lbl, 2)
+		lunge_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		text_hbox.add_child(lunge_lbl)
+
+		var to_switch_lbl := Label.new()
+		to_switch_lbl.text = "TO SWITCH"
+		to_switch_lbl.add_theme_font_override("font", Tokens.FONT_DISPLAY)
+		to_switch_lbl.add_theme_font_size_override("font_size", 17)
+		to_switch_lbl.add_theme_color_override("font_color", Tokens.CYAN)
+		_legible(to_switch_lbl, 2)
+		to_switch_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		text_hbox.add_child(to_switch_lbl)
 
 func _build_debug_overlay() -> void:
 	if not Settings.show_debug_info:

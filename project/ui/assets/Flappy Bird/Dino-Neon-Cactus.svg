@@ -1,29 +1,57 @@
 <svg width="80" height="100" viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <filter id="neonRed" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="2.5" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
+    <!-- Laser Core Gradient -->
+    <linearGradient id="laserGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#D91E18"/>
+      <stop offset="35%" stop-color="#FF3B2F"/>
+      <stop offset="50%" stop-color="#FFFFFF"/>
+      <stop offset="65%" stop-color="#FF3B2F"/>
+      <stop offset="100%" stop-color="#D91E18"/>
+    </linearGradient>
+
+    <!-- Carbon Casing Gradient -->
+    <linearGradient id="casingGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#24232C"/>
+      <stop offset="100%" stop-color="#0E0D14"/>
+    </linearGradient>
+
+    <!-- Caution Hash Pattern -->
+    <pattern id="sigStripes" width="10" height="10" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+      <rect x="0" y="0" width="5" height="10" fill="#FF3B2F"/>
+      <rect x="5" y="0" width="5" height="10" fill="#0B0B0C"/>
+    </pattern>
   </defs>
 
-  <ellipse cx="40" cy="52" rx="32" ry="44" fill="#EF4444" opacity="0.06"/>
+  <!-- Ambient Red Energy Aura -->
+  <ellipse cx="40" cy="50" rx="36" ry="46" fill="#FF3B2F" opacity="0.12"/>
 
-  <rect x="4" y="16" width="13" height="30" rx="6" fill="#EF4444" filter="url(#neonRed)"/>
-  <rect x="4" y="34" width="34" height="13" rx="6" fill="#EF4444" filter="url(#neonRed)"/>
+  <!-- Left Secondary Plasma Branch -->
+  <rect x="6" y="24" width="12" height="28" rx="6" fill="url(#casingGrad)" stroke="#FF3B2F" stroke-width="1.2"/>
+  <rect x="10" y="26" width="4" height="22" rx="2" fill="url(#laserGrad)"/>
+  <!-- Connecting Horizontal Arm -->
+  <rect x="6" y="44" width="30" height="12" rx="4" fill="url(#casingGrad)" stroke="#FF3B2F" stroke-width="1"/>
+  <rect x="8" y="48" width="26" height="4" rx="2" fill="url(#laserGrad)"/>
 
-  <rect x="63" y="8" width="13" height="32" rx="6" fill="#EF4444" filter="url(#neonRed)"/>
-  <rect x="43" y="26" width="34" height="13" rx="6" fill="#EF4444" filter="url(#neonRed)"/>
+  <!-- Right Secondary Plasma Branch (Taller) -->
+  <rect x="62" y="14" width="12" height="32" rx="6" fill="url(#casingGrad)" stroke="#FF3B2F" stroke-width="1.2"/>
+  <rect x="66" y="16" width="4" height="26" rx="2" fill="url(#laserGrad)"/>
+  <!-- Connecting Horizontal Arm -->
+  <rect x="42" y="36" width="32" height="12" rx="4" fill="url(#casingGrad)" stroke="#FF3B2F" stroke-width="1"/>
+  <rect x="44" y="40" width="28" height="4" rx="2" fill="url(#laserGrad)"/>
 
-  <rect x="33" y="2" width="14" height="96" rx="7" fill="#EF4444" filter="url(#neonRed)"/>
+  <!-- Central High-Voltage Monolith Tower -->
+  <rect x="33" y="4" width="14" height="92" rx="7" fill="url(#casingGrad)" stroke="#FF3B2F" stroke-width="1.5"/>
+  <!-- Main High-Energy Laser Filament Core -->
+  <rect x="37" y="6" width="6" height="88" rx="3" fill="url(#laserGrad)"/>
+  <rect x="39" y="8" width="2" height="84" rx="1" fill="#FFFFFF" opacity="0.85"/>
 
-  <rect x="38" y="2" width="5" height="96" rx="2.5" fill="#FCA5A5" opacity="0.35"/>
-  <rect x="7" y="16" width="5" height="26" rx="2.5" fill="#FCA5A5" opacity="0.3"/>
-  <rect x="66" y="8" width="5" height="28" rx="2.5" fill="#FCA5A5" opacity="0.3"/>
-  <rect x="5" y="38" width="30" height="5" rx="2.5" fill="#FCA5A5" opacity="0.3"/>
-  <rect x="45" y="30" width="30" height="5" rx="2.5" fill="#FCA5A5" opacity="0.3"/>
+  <!-- Segment Stabilizer Rings -->
+  <rect x="31" y="22" width="18" height="4" rx="2" fill="#0B0B0C" stroke="#FF6B6B" stroke-width="0.8"/>
+  <rect x="31" y="60" width="18" height="4" rx="2" fill="#0B0B0C" stroke="#FF6B6B" stroke-width="0.8"/>
 
-  <ellipse cx="40" cy="97" rx="20" ry="5" fill="#EF4444" opacity="0.45" filter="url(#neonRed)"/>
+  <!-- Base Ground Mount (Heavy Metallic Collar) -->
+  <rect x="22" y="88" width="36" height="10" rx="3" fill="url(#casingGrad)" stroke="#FF3B2F" stroke-width="1"/>
+  <rect x="24" y="90" width="32" height="4" fill="url(#sigStripes)"/>
+  <circle cx="26" cy="94" r="1.5" fill="#FFD043"/>
+  <circle cx="54" cy="94" r="1.5" fill="#FFD043"/>
 </svg>

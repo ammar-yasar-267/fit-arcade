@@ -10,6 +10,7 @@ var task_file := "pose_landmarker/movenet_lightning/movenet_singlepose_lightning
 var renderer: MediaPipePoseRenderer
 var _last_camera_image: MediaPipeImage = null
 var game_instance: GameBase = null
+var _game_viewport: SubViewport = null
 var game_canvas: CanvasLayer = null
 var pose_preview: TextureRect = null
 var pose_canvas: CanvasLayer = null
@@ -247,6 +248,7 @@ func _start_exercise_and_game() -> void:
 					viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 					viewport.handle_input_locally = true
 					viewport.transparent_bg = false
+					_game_viewport = viewport
 					
 					# Create the display texture FIRST
 					var game_display = TextureRect.new()
@@ -472,8 +474,13 @@ func show_result(image: MediaPipeImage, landmarks: MediaPipeNormalizedLandmarks)
 func _get_preview_render_source(image: MediaPipeImage) -> MediaPipeImage:
 	return image
 
+func _unhandled_input(event: InputEvent) -> void:
+	if _game_viewport and is_instance_valid(_game_viewport):
+		_game_viewport.push_input(event)
+
 func _exit_tree() -> void:
 	_reset()
+	_game_viewport = null
 	if ExerciseRecognizer.rep_completed.is_connected(_on_preview_rep):
 		ExerciseRecognizer.rep_completed.disconnect(_on_preview_rep)
 	GameManager.clear_active_game()

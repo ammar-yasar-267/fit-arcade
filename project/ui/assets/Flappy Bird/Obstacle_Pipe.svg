@@ -1,50 +1,100 @@
 <svg width="80" height="300" viewBox="0 0 80 300" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <filter id="rimGlow" x="-10%" y="-5%" width="120%" height="120%">
-      <feGaussianBlur stdDeviation="3" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-    <linearGradient id="pipeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#180840"/>
-      <stop offset="20%" stop-color="#2D1B69"/>
-      <stop offset="50%" stop-color="#3B2580"/>
-      <stop offset="80%" stop-color="#2D1B69"/>
-      <stop offset="100%" stop-color="#180840"/>
+    <!-- Pipe Body Gradient (Carbon Dark Armor) -->
+    <linearGradient id="armorGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0E0E12"/>
+      <stop offset="15%" stop-color="#1A1A22"/>
+      <stop offset="45%" stop-color="#24232E"/>
+      <stop offset="75%" stop-color="#181820"/>
+      <stop offset="100%" stop-color="#0A0A0D"/>
     </linearGradient>
+
+    <!-- Energy Core Conduit Gradient -->
+    <linearGradient id="energyCore" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#E04000"/>
+      <stop offset="30%" stop-color="#FF8A1F"/>
+      <stop offset="50%" stop-color="#FFE082"/>
+      <stop offset="70%" stop-color="#FF8A1F"/>
+      <stop offset="100%" stop-color="#E04000"/>
+    </linearGradient>
+
+    <!-- Gate Collar Gradient -->
+    <linearGradient id="collarGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1B1A24"/>
+      <stop offset="35%" stop-color="#2D2B3D"/>
+      <stop offset="70%" stop-color="#22212E"/>
+      <stop offset="100%" stop-color="#14131C"/>
+    </linearGradient>
+
+    <!-- Caution Stripe Pattern -->
+    <pattern id="hazardStripes" width="12" height="12" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+      <rect x="0" y="0" width="6" height="12" fill="#FF8A1F"/>
+      <rect x="6" y="0" width="6" height="12" fill="#0B0B0C"/>
+    </pattern>
   </defs>
 
-  <rect x="8" y="0" width="64" height="260" fill="url(#pipeGrad)"/>
-  <rect x="8" y="0" width="10" height="260" fill="#4A35A0" opacity="0.35"/>
-  <rect x="62" y="0" width="10" height="260" fill="#0C0520" opacity="0.5"/>
-  <rect x="37" y="0" width="3" height="260" fill="#120630" opacity="0.7"/>
+  <!-- Ambient Outer Glow along Pipe Body -->
+  <rect x="4" y="0" width="72" height="250" fill="#FF8A1F" opacity="0.06"/>
 
-  <rect x="8" y="55" width="64" height="2.5" fill="#7C3AED" opacity="0.35"/>
-  <rect x="8" y="120" width="64" height="2.5" fill="#7C3AED" opacity="0.35"/>
-  <rect x="8" y="185" width="64" height="2.5" fill="#7C3AED" opacity="0.35"/>
+  <!-- Main Carbon Tower Column -->
+  <rect x="8" y="0" width="64" height="252" fill="url(#armorGrad)"/>
+  
+  <!-- Outer Bezel Borders -->
+  <rect x="8" y="0" width="2" height="252" fill="#3D3B4D"/>
+  <rect x="70" y="0" width="2" height="252" fill="#14131C"/>
 
-  <rect x="20" y="0" width="2" height="260" fill="#9D71E8" opacity="0.12"/>
-  <rect x="58" y="0" width="2" height="260" fill="#9D71E8" opacity="0.12"/>
+  <!-- Central High-Voltage Energy Channel -->
+  <rect x="36" y="0" width="8" height="252" fill="url(#energyCore)"/>
+  <rect x="39" y="0" width="2" height="252" fill="#FFFFFF" opacity="0.75"/>
 
-  <rect x="0" y="250" width="80" height="50" rx="6" fill="#EF4444" opacity="0.22" filter="url(#rimGlow)"/>
+  <!-- Secondary Energy Rail Left & Right -->
+  <rect x="18" y="0" width="3" height="252" fill="#FF8A1F" opacity="0.4"/>
+  <rect x="59" y="0" width="3" height="252" fill="#FF8A1F" opacity="0.4"/>
 
-  <rect x="0" y="254" width="80" height="46" rx="5" fill="#2D1B69"/>
-  <rect x="0" y="254" width="80" height="6" rx="3" fill="#EF4444" filter="url(#rimGlow)"/>
-  <rect x="4" y="262" width="72" height="30" rx="3" fill="#3B2580" opacity="0.9"/>
-  <rect x="6" y="264" width="68" height="6" rx="3" fill="#FFFFFF" opacity="0.06"/>
-  <rect x="0" y="294" width="80" height="6" rx="3" fill="#EF4444" opacity="0.55"/>
+  <!-- Periodic Segment Ribs & Status LEDs -->
+  <rect x="8" y="45" width="64" height="3" fill="#0B0B0C"/>
+  <rect x="8" y="48" width="64" height="1" fill="#FF8A1F" opacity="0.6"/>
+  <circle cx="13" cy="46.5" r="1.5" fill="#FFD043"/>
+  <circle cx="67" cy="46.5" r="1.5" fill="#FFD043"/>
 
-  <circle cx="16" cy="278" r="4.5" fill="#1A0D40"/>
-  <circle cx="16" cy="278" r="3" fill="#F87171" opacity="0.8"/>
-  <circle cx="16" cy="278" r="1.2" fill="#FFFFFF" opacity="0.7"/>
+  <rect x="8" y="105" width="64" height="3" fill="#0B0B0C"/>
+  <rect x="8" y="108" width="64" height="1" fill="#FF8A1F" opacity="0.6"/>
+  <circle cx="13" cy="106.5" r="1.5" fill="#FFD043"/>
+  <circle cx="67" cy="106.5" r="1.5" fill="#FFD043"/>
 
-  <circle cx="64" cy="278" r="4.5" fill="#1A0D40"/>
-  <circle cx="64" cy="278" r="3" fill="#F87171" opacity="0.8"/>
-  <circle cx="64" cy="278" r="1.2" fill="#FFFFFF" opacity="0.7"/>
+  <rect x="8" y="165" width="64" height="3" fill="#0B0B0C"/>
+  <rect x="8" y="168" width="64" height="1" fill="#FF8A1F" opacity="0.6"/>
+  <circle cx="13" cy="166.5" r="1.5" fill="#FFD043"/>
+  <circle cx="67" cy="166.5" r="1.5" fill="#FFD043"/>
 
-  <circle cx="40" cy="290" r="4.5" fill="#1A0D40"/>
-  <circle cx="40" cy="290" r="3" fill="#F87171" opacity="0.8"/>
-  <circle cx="40" cy="290" r="1.2" fill="#FFFFFF" opacity="0.7"/>
+  <rect x="8" y="220" width="64" height="3" fill="#0B0B0C"/>
+  <rect x="8" y="223" width="64" height="1" fill="#FF8A1F" opacity="0.6"/>
+
+  <!-- GATE EMITTER CAP (Facing the flight gap) -->
+  <!-- Ambient Cap Glow -->
+  <rect x="0" y="246" width="80" height="54" rx="4" fill="#FF8A1F" opacity="0.18"/>
+
+  <!-- Collar Base Block -->
+  <rect x="0" y="248" width="80" height="48" rx="3" fill="url(#collarGrad)" stroke="#3D3A50" stroke-width="1"/>
+
+  <!-- Top Caution Hazard Stripe Ribbon -->
+  <rect x="2" y="250" width="76" height="8" fill="url(#hazardStripes)" opacity="0.85"/>
+
+  <!-- Main Energy Core Emitter Chamber -->
+  <rect x="6" y="261" width="68" height="24" rx="2" fill="#0B0B0C"/>
+  
+  <!-- Glowing Plasma Emitter Core -->
+  <rect x="12" y="265" width="56" height="16" rx="2" fill="url(#energyCore)"/>
+  <rect x="20" y="268" width="40" height="10" rx="1" fill="#FFFFFF" opacity="0.7"/>
+
+  <!-- Focus Emitter Pins -->
+  <circle cx="16" cy="273" r="3" fill="#0B0B0C"/>
+  <circle cx="16" cy="273" r="1.5" fill="#FFE082"/>
+
+  <circle cx="64" cy="273" r="3" fill="#0B0B0C"/>
+  <circle cx="64" cy="273" r="1.5" fill="#FFE082"/>
+
+  <!-- Extreme Rim Emitter Blade (Bright Laser Edge at the very tip) -->
+  <rect x="0" y="294" width="80" height="6" fill="#FF8A1F"/>
+  <rect x="4" y="296" width="72" height="2" fill="#FFFFFF"/>
 </svg>

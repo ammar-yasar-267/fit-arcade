@@ -1,38 +1,81 @@
 <svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
-      <feGaussianBlur stdDeviation="2" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="3.5" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
+    <!-- Core Flame Gradient -->
+    <linearGradient id="flameBody" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD043"/>
+      <stop offset="35%" stop-color="#FF8A1F"/>
+      <stop offset="85%" stop-color="#E03E00"/>
+      <stop offset="100%" stop-color="#9E1500"/>
+    </linearGradient>
+
+    <!-- Wing Gradient -->
+    <linearGradient id="flameWing" x1="0%" y1="0%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#FFE17D"/>
+      <stop offset="40%" stop-color="#FF8A1F"/>
+      <stop offset="100%" stop-color="#C22700"/>
+    </linearGradient>
+
+    <!-- Thruster Fire Gradient -->
+    <linearGradient id="thrustGrad" x1="100%" y1="50%" x2="0%" y2="50%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="25%" stop-color="#FFD043"/>
+      <stop offset="65%" stop-color="#FF8A1F"/>
+      <stop offset="100%" stop-color="#FF2200" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Visor Gradient -->
+    <linearGradient id="visorGrad" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="45%" stop-color="#FFF2A3"/>
+      <stop offset="100%" stop-color="#FF8A1F"/>
+    </linearGradient>
+
+    <!-- Carbon Dark Trim -->
+    <linearGradient id="carbonTrim" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#26262B"/>
+      <stop offset="100%" stop-color="#0B0B0C"/>
+    </linearGradient>
   </defs>
 
-  <circle cx="40" cy="44" r="34" fill="#06B6D4" opacity="0.08"/>
+  <!-- Ambient Energy Halo -->
+  <circle cx="42" cy="42" r="36" fill="#FF8A1F" opacity="0.14"/>
+  <circle cx="42" cy="42" r="30" fill="#FFD043" opacity="0.08"/>
 
-  <polygon points="8,46 26,40 26,54" fill="#0EA5E9" opacity="0.8"/>
-  <polygon points="12,46 24,42 24,52" fill="#67E8F9" opacity="0.25"/>
+  <!-- Thruster Exhaust Jet -->
+  <polygon points="2,40 18,33 18,47" fill="url(#thrustGrad)"/>
+  <polygon points="6,40 18,36 18,44" fill="#FFFFFF" opacity="0.75"/>
 
-  <ellipse cx="34" cy="24" rx="20" ry="8" fill="#06B6D4" filter="url(#glow)" transform="rotate(-30 34 24)"/>
-  <ellipse cx="34" cy="24" rx="15" ry="5" fill="#67E8F9" opacity="0.2" transform="rotate(-30 34 24)"/>
+  <!-- Thruster Nozzle Ring (Carbon) -->
+  <path d="M 16,33 L 22,35 L 22,45 L 16,47 Z" fill="url(#carbonTrim)" stroke="#FF8A1F" stroke-width="1"/>
 
-  <ellipse cx="44" cy="46" rx="20" ry="16" fill="#06B6D4" filter="url(#softGlow)"/>
-  <ellipse cx="38" cy="38" rx="10" ry="9" fill="#FFFFFF" opacity="0.1"/>
+  <!-- Main Chassis / Torso -->
+  <ellipse cx="42" cy="42" rx="22" ry="17" fill="url(#flameBody)"/>
 
-  <ellipse cx="56" cy="32" rx="14" ry="12" fill="#06B6D4" filter="url(#glow)"/>
+  <!-- Top Cyber-Wing (Upper Fin) -->
+  <path d="M 28,34 Q 38,15 54,18 Q 44,28 34,36 Z" fill="url(#flameWing)"/>
+  <path d="M 32,30 Q 40,19 50,20 Q 44,27 36,33 Z" fill="#FFEBB0" opacity="0.5"/>
 
-  <circle cx="62" cy="28" r="5.5" fill="#FFFFFF" filter="url(#glow)"/>
-  <circle cx="63" cy="28" r="3" fill="#0C1A2E"/>
-  <circle cx="64" cy="27" r="1.3" fill="#FFFFFF"/>
+  <!-- Bottom Stabilizer Fin -->
+  <path d="M 30,48 Q 38,62 50,58 Q 42,52 34,48 Z" fill="url(#flameWing)" opacity="0.85"/>
 
-  <polygon points="68,30 78,33 68,36" fill="#F59E0B" filter="url(#glow)"/>
-  <polygon points="68,30 76,33 68,34.5" fill="#FCD34D" opacity="0.7"/>
+  <!-- Energy Circuit Accents on Body -->
+  <path d="M 24,42 L 36,42 L 40,46" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>
+  <circle cx="40" cy="46" r="1.8" fill="#FFFFFF"/>
+
+  <!-- Forehead / Brow Guard -->
+  <path d="M 40,27 Q 56,26 63,33 Q 54,34 44,30 Z" fill="url(#carbonTrim)"/>
+
+  <!-- Visor Eye (High-Tech Optics) -->
+  <ellipse cx="56" cy="37" rx="10" ry="8" fill="url(#carbonTrim)" stroke="#FFD043" stroke-width="1.2"/>
+  <ellipse cx="57" cy="37" rx="7.5" ry="5.5" fill="url(#visorGrad)"/>
+  <ellipse cx="58" cy="36" rx="4" ry="2.5" fill="#0B0B0C"/>
+  <circle cx="59.5" cy="35" r="1.5" fill="#FFFFFF"/>
+
+  <!-- Beak / Aerodynamic Nose Cone -->
+  <polygon points="63,39 76,42 63,46" fill="#FFD043"/>
+  <polygon points="63,39 73,42 63,43" fill="#FFFFFF" opacity="0.6"/>
+  <polygon points="63,43 76,42 63,46" fill="#E07000"/>
+
+  <!-- Outer Neon Edge Highlight -->
+  <path d="M 24,37 Q 38,25 58,28" fill="none" stroke="#FFF2C6" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
 </svg>

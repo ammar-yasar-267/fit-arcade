@@ -40,11 +40,18 @@ func _init() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 
 func _ready() -> void:
-	# Select first unlocked mode
-	for m in Tokens.MODES:
-		if not locked_modes.get(m["id"], false):
-			_selected_mode = m["id"]
-			break
+	# Select the game you last played (or default to first unlocked mode)
+	var target_mode := "dino"
+	if get_tree().root.has_node("SessionManager"):
+		target_mode = SessionManager.get_last_played_mode()
+
+	if not locked_modes.get(target_mode, false):
+		_selected_mode = target_mode
+	else:
+		for m in Tokens.MODES:
+			if not locked_modes.get(m["id"], false):
+				_selected_mode = m["id"]
+				break
 
 	_build_ui()
 
@@ -316,12 +323,16 @@ func _on_row_selected(mode_id: String) -> void:
 	if _selected_mode == mode_id:
 		return
 	_selected_mode = mode_id
+	if get_tree().root.has_node("SessionManager"):
+		SessionManager.set_last_played_mode(mode_id)
 	for m_id in _game_rows.keys():
 		var row = _game_rows[m_id]
 		row.is_active = (m_id == _selected_mode)
 
 func _on_mode_start(mode_id: String) -> void:
 	if not locked_modes.get(mode_id, false):
+		if get_tree().root.has_node("SessionManager"):
+			SessionManager.set_last_played_mode(mode_id)
 		mode_picked.emit(mode_id)
 
 func _update_rows() -> void:

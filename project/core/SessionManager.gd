@@ -11,6 +11,7 @@ var total_reps_today: int = 0
 var session_score: int = 0
 var daily_streak: int = 1
 var last_workout_result: Dictionary = {}
+var last_played_mode: String = "dino"
 
 const WORKOUTS_FILE := "user://fitarcade_workout_history.json"
 const BEST_SCORES_FILE := "user://fitarcade_best_scores.cfg"
@@ -37,6 +38,7 @@ func clear_local_data() -> void:
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(file_path))
 	reset_session()
 	last_workout_result = {}
+	last_played_mode = "dino"
 	total_reps_today = 0
 	daily_streak = 1
 
@@ -66,8 +68,27 @@ func record_workout(game_mode: String, score: int, reps: int) -> void:
 		_best_scores[game_mode] = score
 		_save_best_scores()
 
+	set_last_played_mode(game_mode)
 	_update_today_reps()
 	workout_logged.emit(game_mode, score, reps)
+
+func set_last_played_mode(mode_id: String) -> void:
+	var canonical := "lane" if mode_id in ["lane", "switcher"] else mode_id
+	if canonical in ["dino", "lane", "flappy"]:
+		last_played_mode = canonical
+		_save_best_scores()
+
+func get_last_played_mode() -> String:
+	if last_played_mode != "":
+		return "lane" if last_played_mode in ["lane", "switcher"] else last_played_mode
+	if _workout_history.size() > 0:
+		for i in range(_workout_history.size() - 1, -1, -1):
+			var w = _workout_history[i]
+			if typeof(w) == TYPE_DICTIONARY and w.has("mode"):
+				var m: String = str(w.get("mode", ""))
+				if m != "":
+					return "lane" if m in ["lane", "switcher"] else m
+	return "dino"
 
 func get_best_score(game_mode: String) -> int:
 	return _best_scores.get(game_mode, 0)
@@ -191,9 +212,22 @@ func _load_best_scores() -> void:
 	if cfg.load(BEST_SCORES_FILE) == OK:
 		for k in cfg.get_section_keys("scores"):
 			_best_scores[k] = cfg.get_value("scores", k, 0)
+		var saved_mode: String = str(cfg.get_value("meta", "last_played_mode", ""))
+		if saved_mode != "":
+			last_played_mode = "lane" if saved_mode in ["lane", "switcher"] else saved_mode
+		elif _workout_history.size() > 0:
+			for i in range(_workout_history.size() - 1, -1, -1):
+				var w = _workout_history[i]
+				if typeof(w) == TYPE_DICTIONARY and w.has("mode"):
+					var m: String = str(w.get("mode", ""))
+					if m != "":
+						last_played_mode = "lane" if m in ["lane", "switcher"] else m
+						break
 
 func _save_best_scores() -> void:
 	var cfg := ConfigFile.new()
 	for k in _best_scores.keys():
 		cfg.set_value("scores", k, _best_scores[k])
+	if last_played_mode != "":
+		cfg.set_value("meta", "last_played_mode", last_played_mode)
 	cfg.save(BEST_SCORES_FILE)
