@@ -200,6 +200,7 @@ func _http_request(url: String, method: int, headers: PackedStringArray, body: S
 	add_child(req)
 	var err := req.request(url, headers, method, body)
 	if err != OK:
+		push_warning("Backend HTTPRequest failed to start (err %d): %s" % [err, url])
 		req.queue_free()
 		return {"ok": false, "status": 0, "data": null}
 	var result: Array = await req.request_completed
@@ -208,6 +209,8 @@ func _http_request(url: String, method: int, headers: PackedStringArray, body: S
 	var response_body: PackedByteArray = result[3]
 	var text := response_body.get_string_from_utf8()
 	var parsed = JSON.parse_string(text) if text != "" else null
+	if response_code < 200 or response_code >= 300:
+		push_warning("Backend HTTP request returned status %d for %s: %s" % [response_code, url, text])
 	return {
 		"ok": response_code >= 200 and response_code < 300,
 		"status": response_code,
