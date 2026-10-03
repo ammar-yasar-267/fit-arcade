@@ -64,7 +64,7 @@ func process_frame(landmarks: MediaPipeNormalizedLandmarks, current_state: Exerc
 
 	# Side: whichever knee is more bent is the lunging leg
 	if is_lunging:
-		lunge_side = 0 if l_angle < r_angle else 1
+		lunge_side = 1 if l_angle < r_angle else 0
 
 	match current_state:
 		ExerciseRecognizer.State.IDLE, ExerciseRecognizer.State.REP_COUNTED, ExerciseRecognizer.State.INVALID:
