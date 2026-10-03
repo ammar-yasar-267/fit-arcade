@@ -18,3 +18,7 @@ firebase-debug.log
 *.tmp
 ~*
 
+# Local developer secrets (never commit to git)
+local_dev_secret.txt
+*local_dev_secret.txt
+

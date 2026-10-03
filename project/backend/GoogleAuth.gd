@@ -167,7 +167,7 @@ static func _authenticate_loopback(node: Node) -> Dictionary:
 	var state := _generate_random_token(16)
 
 	var auth_url := "https://accounts.google.com/o/oauth2/v2/auth?" + \
-		"client_id=" + FirebaseConfig.GOOGLE_CLIENT_ID.uri_encode() + \
+		"client_id=" + _get_desktop_client_id().uri_encode() + \
 		"&redirect_uri=" + redirect_uri.uri_encode() + \
 		"&response_type=code" + \
 		"&scope=" + "openid%20email%20profile" + \
@@ -222,18 +222,37 @@ static func _authenticate_loopback(node: Node) -> Dictionary:
 	return await _exchange_code_for_tokens(node, auth_code, redirect_uri, code_verifier)
 
 
+static func _get_desktop_client_id() -> String:
+	if FirebaseConfig.GOOGLE_DESKTOP_CLIENT_ID != "":
+		return FirebaseConfig.GOOGLE_DESKTOP_CLIENT_ID
+	return FirebaseConfig.GOOGLE_CLIENT_ID
+
+static func _get_client_secret() -> String:
+	if FirebaseConfig.GOOGLE_CLIENT_SECRET != "":
+		return FirebaseConfig.GOOGLE_CLIENT_SECRET
+	for p in ["res://backend/local_dev_secret.txt", "user://local_dev_secret.txt"]:
+		if FileAccess.file_exists(p):
+			var f := FileAccess.open(p, FileAccess.READ)
+			if f:
+				var sec := f.get_as_text().strip_edges()
+				if sec != "":
+					return sec
+	return ""
+
 static func _exchange_code_for_tokens(node: Node, code: String, redirect_uri: String, code_verifier: String) -> Dictionary:
 	var token_url := "https://oauth2.googleapis.com/token"
 	var headers := PackedStringArray(["Content-Type: application/x-www-form-urlencoded"])
+	var desktop_id := _get_desktop_client_id()
+	var secret := _get_client_secret()
 	var body_parts := [
 		"code=" + code.uri_encode(),
-		"client_id=" + FirebaseConfig.GOOGLE_CLIENT_ID.uri_encode(),
+		"client_id=" + desktop_id.uri_encode(),
 		"grant_type=authorization_code",
 		"redirect_uri=" + redirect_uri.uri_encode(),
 		"code_verifier=" + code_verifier.uri_encode(),
 	]
-	if FirebaseConfig.GOOGLE_CLIENT_SECRET != "":
-		body_parts.append("client_secret=" + FirebaseConfig.GOOGLE_CLIENT_SECRET.uri_encode())
+	if secret != "":
+		body_parts.append("client_secret=" + secret.uri_encode())
 
 	var body := "&".join(body_parts)
 
