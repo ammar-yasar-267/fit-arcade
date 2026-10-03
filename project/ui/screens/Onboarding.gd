@@ -34,6 +34,7 @@ var _hint_lbl: Label
 var _preview_badge: Control
 var _preview_name_lbl: Label
 var _continue_btn: Button
+var _google_btn: Button
 
 var _busy: bool = false
 var _last_keyboard_px: int = 0
@@ -166,12 +167,49 @@ func _build_ui() -> void:
 	_continue_btn = _build_primary_button()
 	vbox.add_child(_continue_btn)
 
+	if not replay_mode:
+		vbox.add_child(_spacer(10))
+
+		var or_row := HBoxContainer.new()
+		or_row.add_theme_constant_override("separation", 10)
+
+		var line_l := ColorRect.new()
+		line_l.color = Color(Tokens.LINE.r, Tokens.LINE.g, Tokens.LINE.b, 0.5)
+		line_l.custom_minimum_size = Vector2(0, 1)
+		line_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		line_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		or_row.add_child(line_l)
+
+		var or_lbl := _label("OR", Tokens.FONT_MONO, 10, Tokens.DIM)
+		or_row.add_child(or_lbl)
+
+		var line_r := ColorRect.new()
+		line_r.color = Color(Tokens.LINE.r, Tokens.LINE.g, Tokens.LINE.b, 0.5)
+		line_r.custom_minimum_size = Vector2(0, 1)
+		line_r.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		line_r.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		or_row.add_child(line_r)
+
+		vbox.add_child(or_row)
+		vbox.add_child(_spacer(10))
+
+		_google_btn = _build_secondary_button("SIGN IN WITH GOOGLE")
+		_google_btn.pressed.connect(_on_google_sign_in_pressed)
+		vbox.add_child(_google_btn)
+
 	vbox.add_child(_spacer(12))
 
 	var footnote := _label("ANONYMOUS ACCOUNT  ·  DELETE IT ANYTIME IN SETTINGS", Tokens.FONT_MONO, 9, Tokens.DIM)
 	footnote.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	footnote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(footnote)
+
+	vbox.add_child(_spacer(6))
+
+	var link_hint := _label("You can optionally link a Google account in Settings later to preserve your account across different devices.", Tokens.FONT_SANS, 11, Color(1, 1, 1, 0.45))
+	link_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	link_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(link_hint)
 
 func _build_input() -> LineEdit:
 	var le := LineEdit.new()
@@ -258,6 +296,38 @@ func _build_primary_button() -> Button:
 	btn.pressed.connect(_submit)
 	return btn
 
+func _build_secondary_button(text: String) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.custom_minimum_size = Vector2(0, 50)
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	btn.add_theme_font_override("font", Tokens.FONT_DISPLAY)
+	btn.add_theme_font_size_override("font_size", 22)
+
+	var normal := Tokens.make_panel_style(Color(Tokens.PANEL.r, Tokens.PANEL.g, Tokens.PANEL.b, 0.7), Tokens.LINE, 1)
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.border_color = Tokens.VOLT
+	hover.bg_color = Color(Tokens.VOLT.r, Tokens.VOLT.g, Tokens.VOLT.b, 0.08)
+
+	var pressed := hover.duplicate() as StyleBoxFlat
+	pressed.bg_color = Color(Tokens.VOLT.r, Tokens.VOLT.g, Tokens.VOLT.b, 0.16)
+
+	var disabled := normal.duplicate() as StyleBoxFlat
+	disabled.border_color = Tokens.LINE
+	disabled.bg_color = Color(0, 0, 0, 0)
+
+	btn.add_theme_stylebox_override("normal", normal)
+	btn.add_theme_stylebox_override("hover", hover)
+	btn.add_theme_stylebox_override("pressed", pressed)
+	btn.add_theme_stylebox_override("disabled", disabled)
+
+	btn.add_theme_color_override("font_color", Tokens.WHITE)
+	btn.add_theme_color_override("font_hover_color", Tokens.VOLT)
+	btn.add_theme_color_override("font_pressed_color", Tokens.VOLT)
+	btn.add_theme_color_override("font_disabled_color", Tokens.DIM)
+	return btn
+
 # -----------------------------------------------------------------------------
 # Behaviour
 # -----------------------------------------------------------------------------
@@ -315,6 +385,77 @@ func _submit() -> void:
 		# Offline / backend unavailable: keep going on-device, sync later.
 		Backend.save_local_profile(display_name)
 	completed.emit()
+
+func _on_google_sign_in_pressed() -> void:
+	if _busy:
+		return
+
+	if not FirebaseConfig.is_google_configured():
+		_set_hint("GOOGLE SIGN-IN IS NOT CONFIGURED IN FIREBASECONFIG.GD", true)
+		return
+
+	_busy = true
+	_continue_btn.disabled = true
+	if _google_btn:
+		_google_btn.disabled = true
+		_google_btn.text = "SIGNING IN…"
+	_input.editable = false
+	_set_hint("CONNECTING TO GOOGLE…", false)
+
+	var auth_res := await GoogleAuth.authenticate(self)
+	if not is_instance_valid(self):
+		return
+
+	if not auth_res.get("ok", false):
+		_busy = false
+		_input.editable = true
+		_continue_btn.disabled = false
+		if _google_btn:
+			_google_btn.disabled = false
+			_google_btn.text = "SIGN IN WITH GOOGLE"
+		_refresh()
+		var err_msg: String = auth_res.get("message", "SIGN-IN CANCELLED")
+		_set_hint(err_msg.to_upper(), true)
+		return
+
+	_set_hint("SIGNING IN…", false)
+	var id_token: String = auth_res.get("id_token", "")
+	var access_token: String = auth_res.get("access_token", "")
+
+	var signin_res := await Backend.sign_in_with_google(id_token, access_token)
+	if not is_instance_valid(self):
+		return
+
+	if not signin_res.get("ok", false):
+		_busy = false
+		_input.editable = true
+		_continue_btn.disabled = false
+		if _google_btn:
+			_google_btn.disabled = false
+			_google_btn.text = "SIGN IN WITH GOOGLE"
+		_refresh()
+		var err: String = signin_res.get("message", "FAILED TO SIGN IN")
+		_set_hint(err.to_upper(), true)
+		return
+
+	if signin_res.get("is_existing_player", false):
+		_set_hint("ACCOUNT RESTORED. WELCOME BACK!", false)
+		await get_tree().create_timer(0.4).timeout
+		completed.emit()
+	else:
+		_busy = false
+		_input.editable = true
+		if _google_btn:
+			_google_btn.visible = false
+		var restored_prof: Dictionary = signin_res.get("profile", {})
+		var default_name: String = restored_prof.get("display_name", "")
+		if default_name != "":
+			_input.text = default_name
+			_input.caret_column = default_name.length()
+		var email: String = signin_res.get("email", "")
+		_set_hint("SIGNED IN AS %s. CONFIRM YOUR DISPLAY NAME." % email, false)
+		_continue_btn.text = "CONFIRM & PLAY"
+		_refresh()
 
 # -----------------------------------------------------------------------------
 # Helpers

@@ -50,6 +50,8 @@ func _ready() -> void:
 	poll_timer.timeout.connect(_refresh_remote_state)
 	add_child(poll_timer)
 
+	Backend.account_deleted.connect(_on_account_deleted)
+
 	# One-shot: consume the replay request so a later relaunch goes back to normal
 	var replay_onboarding: bool = Engine.has_meta(REPLAY_ONBOARDING_META)
 	if replay_onboarding:
@@ -60,9 +62,17 @@ func _ready() -> void:
 		show_screen("onboarding", true)
 	else:
 		show_screen("hub" if Backend.has_local_profile() else "onboarding")
+		if Backend.has_local_profile():
+			_validate_session_and_sync()
 
 	# A name saved offline during onboarding gets pushed to the server once we can
 	Backend.sync_pending_profile()
+
+func _validate_session_and_sync() -> void:
+	await Backend.validate_session()
+
+func _on_account_deleted() -> void:
+	show_screen("onboarding")
 
 func show_screen(target_screen: String, replay: bool = false) -> void:
 	screen = target_screen

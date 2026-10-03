@@ -38,7 +38,9 @@ service cloud.firestore {
 
     match /profiles/{uid} {
       allow read: if true;
-      allow create, update: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
+        && !('google_email' in request.resource.data);
       // Players can delete their own profile (Settings > Delete account).
       allow delete: if isSignedIn() && request.auth.uid == uid;
     }

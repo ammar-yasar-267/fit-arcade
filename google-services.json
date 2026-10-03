@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1062625300261",
+    "project_id": "fitarcade-app",
+    "storage_bucket": "fitarcade-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1062625300261:android:8b9ab847d440355f75d4cc",
+        "android_client_info": {
+          "package_name": "com.fitarcade.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1062625300261-bqaalsrd03ttvs98cg9agnjhbj5ahgrj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAS0ndms4WcyMUP4sLXxavsQ3TC7_ntlQ0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1062625300261-bqaalsrd03ttvs98cg9agnjhbj5ahgrj.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

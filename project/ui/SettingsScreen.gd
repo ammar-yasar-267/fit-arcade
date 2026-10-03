@@ -6,13 +6,13 @@ extends Control
 ## 1. Gameplay & Workout (Open by default: Skip Calibration, Audio, Skeleton, Haptics)
 ## 2. Display & Diagnostics (Collapsed by default: Debug Info, Mirror Camera, High Contrast HUD)
 ## 3. Account (Collapsed by default: identity card, Delete Account)
-## 4. Advanced & Developer Options (Collapsed by default: Hardware Accel, Onboarding Preview, Reset)
+## 4. Advanced & Developer Options (Collapsed by default: Hardware Accel)
 
 const TouchScrollClass = preload("res://ui/components/TouchScroll.gd")
 const PageHeaderClass = preload("res://ui/components/PageHeader.gd")
-const MainScript = preload("res://Main.gd")
 const HexBadgeClass = preload("res://ui/components/HexBadge.gd")
 const DeleteAccountOverlayClass = preload("res://ui/components/DeleteAccountOverlay.gd")
+const SignOutOverlayClass = preload("res://ui/components/SignOutOverlay.gd")
 
 ## A tap is a press and release WITHOUT the finger travelling. Rows react to taps only, so a swipe
 ## that starts on a row scrolls the list instead of flipping the switch under the finger (they used
@@ -97,6 +97,9 @@ class ToggleSwitch extends Control:
 var _scroll_container: ScrollContainer
 var _toast_label: Label
 var _delete_overlay: Control
+var _sign_out_overlay: Control
+var _account_vbox: VBoxContainer
+var _toast_tween: Tween
 
 # Toggles dictionary to allow bulk-updating upon reset
 var _toggles: Dictionary = {}
@@ -115,6 +118,7 @@ func _init() -> void:
 func _ready() -> void:
 	_build_ui()
 	_update_accel_ui()
+	Backend.google_linked_state_changed.connect(func(_is_linked: bool): _rebuild_account_section())
 
 func _draw() -> void:
 	# Screen background: #0B0B0C (ink)
@@ -282,24 +286,8 @@ func _build_ui() -> void:
 	root_vbox.add_child(sec_account["header"])
 	root_vbox.add_child(sec_account["wrapper"])
 
-	var account_vbox: VBoxContainer = sec_account["content"]
-	if Backend.has_local_profile():
-		account_vbox.add_child(_build_account_card())
-		account_vbox.add_child(_make_spacer(12))
-
-	var account_note := Label.new()
-	account_note.text = "Deleting your account permanently removes your profile, leaderboard scores and workout history. This can't be undone."
-	account_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	account_note.add_theme_font_override("font", Tokens.FONT_SANS)
-	account_note.add_theme_font_size_override("font_size", 12)
-	account_note.add_theme_color_override("font_color", Tokens.DIM)
-	account_vbox.add_child(account_note)
-
-	account_vbox.add_child(_make_spacer(14))
-
-	var delete_btn := _make_danger_button("DELETE ACCOUNT")
-	delete_btn.pressed.connect(_on_delete_account_pressed)
-	account_vbox.add_child(delete_btn)
+	_account_vbox = sec_account["content"]
+	_rebuild_account_section()
 
 	root_vbox.add_child(_make_spacer(14))
 
@@ -315,7 +303,7 @@ func _build_ui() -> void:
 
 	# Subtle intro note
 	var dev_note := Label.new()
-	dev_note.text = "Pose inference hardware and tools for testing the app."
+	dev_note.text = "Pose inference backend and hardware acceleration."
 	dev_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	dev_note.add_theme_font_override("font", Tokens.FONT_SANS)
 	dev_note.add_theme_font_size_override("font_size", 12)
@@ -387,31 +375,29 @@ func _build_ui() -> void:
 	_accel_helper_lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
 	sec3_vbox.add_child(_accel_helper_lbl)
 
-	sec3_vbox.add_child(_make_spacer(24))
+	sec3_vbox.add_child(_make_spacer(12))
 
-	sec3_vbox.add_child(_make_section_label("ONBOARDING PREVIEW"))
-	sec3_vbox.add_child(_make_spacer(8))
+	root_vbox.add_child(_make_spacer(24))
 
-	var replay_note := Label.new()
-	replay_note.text = "Opens the first-run name screen again so you can test it. Your account isn't touched: saving just renames the existing profile, and the back button cancels."
-	replay_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	replay_note.add_theme_font_override("font", Tokens.FONT_SANS)
-	replay_note.add_theme_font_size_override("font_size", 12)
-	replay_note.add_theme_color_override("font_color", Tokens.DIM)
-	sec3_vbox.add_child(replay_note)
+	# Reset settings to default (outside of all collapsible sections)
+	var reset_container := VBoxContainer.new()
+	reset_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reset_container.add_theme_constant_override("separation", 6)
 
-	sec3_vbox.add_child(_make_spacer(10))
-
-	var replay_btn := _make_outline_button("REPLAY ONBOARDING")
-	replay_btn.pressed.connect(_on_replay_onboarding_pressed)
-	sec3_vbox.add_child(replay_btn)
-
-	sec3_vbox.add_child(_make_spacer(28))
-
-	# 3E. Reset Button
-	var reset_btn := _make_danger_button("RESET ALL SETTINGS TO DEFAULT")
+	var reset_btn := _make_outline_button("RESET ALL SETTINGS TO DEFAULT")
 	reset_btn.pressed.connect(_on_reset_all_pressed)
-	sec3_vbox.add_child(reset_btn)
+	reset_container.add_child(reset_btn)
+
+	var reset_hint := Label.new()
+	reset_hint.text = "Restores gameplay, display, and camera preferences to defaults. Your profile, stats, and cloud data are not affected."
+	reset_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	reset_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	reset_hint.add_theme_font_override("font", Tokens.FONT_SANS)
+	reset_hint.add_theme_font_size_override("font_size", 11)
+	reset_hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.35))
+	reset_container.add_child(reset_hint)
+
+	root_vbox.add_child(reset_container)
 
 	# Bottom spacing for comfortable scrolling
 	root_vbox.add_child(_make_spacer(48))
@@ -573,9 +559,6 @@ func _make_outline_button(text: String) -> Button:
 	btn.add_theme_color_override("font_hover_color", Tokens.VOLT)
 	return btn
 
-func _on_replay_onboarding_pressed() -> void:
-	Engine.set_meta(MainScript.REPLAY_ONBOARDING_META, true)
-	get_tree().change_scene_to_file("res://Main.tscn")
 
 ## Current identity: hex badge, name and tag. Only built when a profile exists.
 func _build_account_card() -> Control:
@@ -620,13 +603,392 @@ func _build_account_card() -> Control:
 	name_lbl.add_theme_color_override("font_color", Tokens.WHITE)
 	col.add_child(name_lbl)
 
+	var is_linked := Backend.is_google_linked()
 	var tag_lbl := Label.new()
-	tag_lbl.text = "#%s  ·  ANONYMOUS ACCOUNT" % Backend.profile.get("tag_number", "0000")
+	tag_lbl.text = "#%s  ·  %s" % [
+		Backend.profile.get("tag_number", "0000"),
+		"GOOGLE LINKED" if is_linked else "ANONYMOUS ACCOUNT"
+	]
 	tag_lbl.add_theme_font_override("font", Tokens.FONT_MONO)
 	tag_lbl.add_theme_font_size_override("font_size", 10)
-	tag_lbl.add_theme_color_override("font_color", Tokens.DIM)
+	tag_lbl.add_theme_color_override("font_color", Tokens.VOLT if is_linked else Tokens.DIM)
 	col.add_child(tag_lbl)
 	return card
+
+
+func _rebuild_account_section() -> void:
+	if not _account_vbox or not is_instance_valid(_account_vbox):
+		return
+	for c in _account_vbox.get_children():
+		c.queue_free()
+
+	if Backend.has_local_profile():
+		_account_vbox.add_child(_build_account_card())
+		_account_vbox.add_child(_make_spacer(12))
+
+	# Google Account linking & status
+	_account_vbox.add_child(_build_google_account_block())
+	_account_vbox.add_child(_make_spacer(16))
+
+	# Separator before Danger Zone
+	var sep := ColorRect.new()
+	sep.color = Color(Tokens.LINE.r, Tokens.LINE.g, Tokens.LINE.b, 0.6)
+	sep.custom_minimum_size = Vector2(0, 1)
+	_account_vbox.add_child(sep)
+	_account_vbox.add_child(_make_spacer(14))
+
+	var account_note := Label.new()
+	account_note.text = "Deleting your account permanently removes your profile, leaderboard scores and workout history. This can't be undone."
+	account_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	account_note.add_theme_font_override("font", Tokens.FONT_SANS)
+	account_note.add_theme_font_size_override("font_size", 12)
+	account_note.add_theme_color_override("font_color", Tokens.DIM)
+	_account_vbox.add_child(account_note)
+
+	_account_vbox.add_child(_make_spacer(12))
+
+	var delete_btn := _make_danger_button("DELETE ACCOUNT")
+	delete_btn.pressed.connect(_on_delete_account_pressed)
+	_account_vbox.add_child(delete_btn)
+
+
+func _build_google_account_block() -> Control:
+	var container := VBoxContainer.new()
+	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	container.add_theme_constant_override("separation", 8)
+
+	var is_linked := Backend.is_google_linked()
+
+	if is_linked:
+		var panel := PanelContainer.new()
+		panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.04, 0.08, 0.05, 0.6)
+		sb.border_width_left = 1
+		sb.border_width_top = 1
+		sb.border_width_right = 1
+		sb.border_width_bottom = 1
+		sb.border_color = Color(Tokens.VOLT.r, Tokens.VOLT.g, Tokens.VOLT.b, 0.4)
+		sb.corner_radius_top_left = 8
+		sb.corner_radius_top_right = 8
+		sb.corner_radius_bottom_left = 8
+		sb.corner_radius_bottom_right = 8
+		sb.content_margin_left = 14
+		sb.content_margin_right = 14
+		sb.content_margin_top = 12
+		sb.content_margin_bottom = 12
+		panel.add_theme_stylebox_override("panel", sb)
+
+		var card_vbox := VBoxContainer.new()
+		card_vbox.add_theme_constant_override("separation", 4)
+		panel.add_child(card_vbox)
+
+		var status_tag := Label.new()
+		status_tag.text = "GOOGLE ACCOUNT CONNECTED"
+		status_tag.add_theme_font_override("font", Tokens.FONT_MONO)
+		status_tag.add_theme_font_size_override("font_size", 10)
+		status_tag.add_theme_color_override("font_color", Tokens.VOLT)
+		card_vbox.add_child(status_tag)
+
+		var email := Backend.get_linked_email()
+		if email != "":
+			var email_lbl := Label.new()
+			email_lbl.text = email
+			email_lbl.add_theme_font_override("font", Tokens.FONT_SANS_BOLD)
+			email_lbl.add_theme_font_size_override("font_size", 13)
+			email_lbl.add_theme_color_override("font_color", Tokens.WHITE)
+			card_vbox.add_child(email_lbl)
+
+		var desc_lbl := Label.new()
+		desc_lbl.text = "Your profile and scores are preserved and synced across devices."
+		desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		desc_lbl.add_theme_font_override("font", Tokens.FONT_SANS)
+		desc_lbl.add_theme_font_size_override("font_size", 11)
+		desc_lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+		card_vbox.add_child(desc_lbl)
+
+		container.add_child(panel)
+
+		var unlink_btn := _make_outline_button("DISCONNECT GOOGLE ACCOUNT")
+		unlink_btn.pressed.connect(_on_disconnect_google_pressed)
+		container.add_child(unlink_btn)
+
+		container.add_child(_make_spacer(4))
+
+		var sign_out_btn := _make_outline_button("SIGN OUT")
+		sign_out_btn.pressed.connect(_on_sign_out_pressed)
+		container.add_child(sign_out_btn)
+
+	else:
+		var title_lbl := _make_section_label("GOOGLE ACCOUNT SYNC")
+		container.add_child(title_lbl)
+
+		var note_lbl := Label.new()
+		note_lbl.text = "Connect a Google account to preserve your profile and sync leaderboard high scores across different devices."
+		note_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		note_lbl.add_theme_font_override("font", Tokens.FONT_SANS)
+		note_lbl.add_theme_font_size_override("font_size", 12)
+		note_lbl.add_theme_color_override("font_color", Tokens.DIM)
+		container.add_child(note_lbl)
+
+		container.add_child(_make_spacer(4))
+
+		var connect_btn := _make_primary_outlined_button("CONNECT GOOGLE ACCOUNT")
+		connect_btn.pressed.connect(_on_connect_google_pressed.bind(connect_btn))
+		container.add_child(connect_btn)
+
+		container.add_child(_make_spacer(4))
+
+		var restore_btn := _make_outline_button("SIGN IN TO RESTORE EXISTING ACCOUNT")
+		restore_btn.pressed.connect(_on_restore_account_pressed.bind(restore_btn))
+		container.add_child(restore_btn)
+
+		container.add_child(_make_spacer(4))
+
+		var sign_out_btn := _make_outline_button("SIGN OUT")
+		sign_out_btn.pressed.connect(_on_sign_out_pressed)
+		container.add_child(sign_out_btn)
+
+	return container
+
+
+func _make_primary_outlined_button(text: String) -> Button:
+	var btn := Button.new()
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.custom_minimum_size = Vector2(0, 48)
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	btn.text = text
+	btn.add_theme_font_override("font", Tokens.FONT_MONO)
+	btn.add_theme_font_size_override("font_size", 11)
+
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(Tokens.VOLT.r, Tokens.VOLT.g, Tokens.VOLT.b, 0.08)
+	sb.border_width_left = 1
+	sb.border_width_top = 1
+	sb.border_width_right = 1
+	sb.border_width_bottom = 1
+	sb.border_color = Tokens.VOLT
+	sb.corner_radius_top_left = 8
+	sb.corner_radius_top_right = 8
+	sb.corner_radius_bottom_left = 8
+	sb.corner_radius_bottom_right = 8
+
+	var hover_sb := sb.duplicate() as StyleBoxFlat
+	hover_sb.bg_color = Color(Tokens.VOLT.r, Tokens.VOLT.g, Tokens.VOLT.b, 0.18)
+
+	var disabled_sb := sb.duplicate() as StyleBoxFlat
+	disabled_sb.border_color = Tokens.LINE
+	disabled_sb.bg_color = Color(0, 0, 0, 0)
+
+	btn.add_theme_stylebox_override("normal", sb)
+	btn.add_theme_stylebox_override("hover", hover_sb)
+	btn.add_theme_stylebox_override("pressed", hover_sb)
+	btn.add_theme_stylebox_override("disabled", disabled_sb)
+	btn.add_theme_color_override("font_color", Tokens.WHITE)
+	btn.add_theme_color_override("font_hover_color", Tokens.VOLT)
+	btn.add_theme_color_override("font_disabled_color", Tokens.DIM)
+	return btn
+
+
+func _on_connect_google_pressed(btn: Button) -> void:
+	if not FirebaseConfig.is_google_configured():
+		_show_toast("GOOGLE CLIENT ID NOT CONFIGURED IN FIREBASECONFIG.GD", true)
+		return
+
+	btn.disabled = true
+	btn.text = "CONNECTING TO GOOGLE…"
+
+	var auth_res := await GoogleAuth.authenticate(self)
+	if not is_instance_valid(btn):
+		return
+
+	if not auth_res.get("ok", false):
+		btn.disabled = false
+		btn.text = "CONNECT GOOGLE ACCOUNT"
+		var err_msg: String = auth_res.get("message", "Failed to connect Google account.")
+		_show_toast(err_msg.to_upper(), true)
+		return
+
+	var id_token: String = auth_res.get("id_token", "")
+	var access_token: String = auth_res.get("access_token", "")
+
+	btn.text = "LINKING ACCOUNT…"
+	var link_res := await Backend.link_google_account(id_token, access_token)
+	if not is_instance_valid(btn):
+		return
+
+	if link_res.get("ok", false):
+		_show_toast("GOOGLE ACCOUNT LINKED SUCCESSFULLY")
+		_rebuild_account_section()
+	else:
+		btn.disabled = false
+		btn.text = "CONNECT GOOGLE ACCOUNT"
+		if link_res.get("error", "") == "already_linked_other":
+			_prompt_switch_account(id_token, access_token)
+		else:
+			var link_err: String = link_res.get("message", "Could not link account.")
+			_show_toast(link_err.to_upper(), true)
+
+
+func _prompt_switch_account(id_token: String, access_token: String) -> void:
+	if not _account_vbox or not is_instance_valid(_account_vbox):
+		return
+
+	var prompt_panel := PanelContainer.new()
+	prompt_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.12, 0.08, 0.04, 0.85)
+	sb.border_width_left = 1
+	sb.border_width_top = 1
+	sb.border_width_right = 1
+	sb.border_width_bottom = 1
+	sb.border_color = Tokens.FLAME
+	sb.corner_radius_top_left = 8
+	sb.corner_radius_top_right = 8
+	sb.corner_radius_bottom_left = 8
+	sb.corner_radius_bottom_right = 8
+	sb.content_margin_left = 14
+	sb.content_margin_right = 14
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 12
+	prompt_panel.add_theme_stylebox_override("panel", sb)
+
+	var pvbox := VBoxContainer.new()
+	pvbox.add_theme_constant_override("separation", 8)
+	prompt_panel.add_child(pvbox)
+
+	var ptitle := Label.new()
+	ptitle.text = "EXISTING ACCOUNT FOUND"
+	ptitle.add_theme_font_override("font", Tokens.FONT_MONO)
+	ptitle.add_theme_font_size_override("font_size", 10)
+	ptitle.add_theme_color_override("font_color", Tokens.FLAME)
+	pvbox.add_child(ptitle)
+
+	var pnote := Label.new()
+	pnote.text = "This Google account already has a saved FitArcade profile. Would you like to switch to that account on this device?"
+	pnote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	pnote.add_theme_font_override("font", Tokens.FONT_SANS)
+	pnote.add_theme_font_size_override("font_size", 12)
+	pnote.add_theme_color_override("font_color", Tokens.WHITE)
+	pvbox.add_child(pnote)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	pvbox.add_child(row)
+
+	var switch_btn := _make_primary_outlined_button("SWITCH ACCOUNT")
+	switch_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	switch_btn.pressed.connect(func():
+		switch_btn.disabled = true
+		switch_btn.text = "SWITCHING…"
+		var switch_res = await Backend.sign_in_with_google(id_token, access_token)
+		if switch_res.get("ok", false):
+			_show_toast("SWITCHED TO EXISTING ACCOUNT")
+			get_tree().change_scene_to_file("res://Main.tscn")
+		else:
+			switch_btn.disabled = false
+			switch_btn.text = "SWITCH ACCOUNT"
+			_show_toast("FAILED TO SWITCH ACCOUNT", true)
+	)
+	row.add_child(switch_btn)
+
+	var cancel_btn := _make_outline_button("CANCEL")
+	cancel_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cancel_btn.pressed.connect(_rebuild_account_section)
+	row.add_child(cancel_btn)
+
+	_account_vbox.add_child(prompt_panel)
+	if _account_vbox.get_child_count() > 2:
+		_account_vbox.move_child(prompt_panel, 2)
+
+
+func _on_restore_account_pressed(btn: Button) -> void:
+	if not FirebaseConfig.is_google_configured():
+		_show_toast("GOOGLE CLIENT ID NOT CONFIGURED IN FIREBASECONFIG.GD", true)
+		return
+
+	btn.disabled = true
+	btn.text = "SIGNING IN…"
+
+	var auth_res := await GoogleAuth.authenticate(self)
+	if not is_instance_valid(btn):
+		return
+
+	if not auth_res.get("ok", false):
+		btn.disabled = false
+		btn.text = "SIGN IN TO RESTORE EXISTING ACCOUNT"
+		var err_msg: String = auth_res.get("message", "Failed to connect Google account.")
+		_show_toast(err_msg.to_upper(), true)
+		return
+
+	var id_token: String = auth_res.get("id_token", "")
+	var access_token: String = auth_res.get("access_token", "")
+
+	btn.text = "RESTORING…"
+	var signin_res := await Backend.sign_in_with_google(id_token, access_token)
+	if not is_instance_valid(btn):
+		return
+
+	if signin_res.get("ok", false):
+		_show_toast("ACCOUNT RESTORED SUCCESSFULLY")
+		await get_tree().create_timer(0.5).timeout
+		get_tree().change_scene_to_file("res://Main.tscn")
+	else:
+		btn.disabled = false
+		btn.text = "SIGN IN TO RESTORE EXISTING ACCOUNT"
+		var err: String = signin_res.get("message", "Failed to restore account.")
+		_show_toast(err.to_upper(), true)
+
+
+func _on_disconnect_google_pressed() -> void:
+	var res := await Backend.unlink_google_account()
+	if res.get("ok", false):
+		_show_toast("GOOGLE ACCOUNT DISCONNECTED", false)
+		_rebuild_account_section()
+	else:
+		_show_toast("COULD NOT DISCONNECT GOOGLE ACCOUNT", true)
+
+func _on_sign_out_pressed() -> void:
+	if _sign_out_overlay and is_instance_valid(_sign_out_overlay):
+		return
+	_sign_out_overlay = SignOutOverlayClass.new(Backend.is_google_linked())
+	_sign_out_overlay.confirmed.connect(_on_sign_out_confirmed)
+	_sign_out_overlay.cancelled.connect(_close_sign_out_overlay)
+	_sign_out_overlay.connect_google_requested.connect(func():
+		_close_sign_out_overlay()
+		var connect_btn := _find_button_by_text(_account_vbox, "CONNECT GOOGLE ACCOUNT")
+		if connect_btn:
+			_on_connect_google_pressed(connect_btn)
+	)
+	add_child(_sign_out_overlay)
+
+func _close_sign_out_overlay() -> void:
+	if _sign_out_overlay and is_instance_valid(_sign_out_overlay):
+		_sign_out_overlay.queue_free()
+	_sign_out_overlay = null
+
+func _on_sign_out_confirmed() -> void:
+	if _sign_out_overlay and is_instance_valid(_sign_out_overlay):
+		_sign_out_overlay.set_busy(true)
+	if not Backend.is_google_linked():
+		var del_res: Dictionary = await Backend.delete_account()
+		if not del_res.get("ok", false):
+			push_warning("Unlinked sign out: remote delete failed (%s), clearing locally" % del_res.get("error", ""))
+			Backend.sign_out()
+	else:
+		Backend.sign_out()
+	SessionManager.clear_local_data()
+	get_tree().change_scene_to_file("res://Main.tscn")
+
+func _find_button_by_text(node: Node, text: String) -> Button:
+	if node is Button and node.text == text:
+		return node
+	for child in node.get_children():
+		var found := _find_button_by_text(child, text)
+		if found:
+			return found
+	return null
 
 func _on_delete_account_pressed() -> void:
 	if _delete_overlay and is_instance_valid(_delete_overlay):
@@ -804,12 +1166,23 @@ func _on_reset_all_pressed() -> void:
 	_update_accel_ui()
 
 	# Show feedback banner
-	if _toast_label:
-		_toast_label.text = "✓ ALL SETTINGS RESTORED TO FACTORY DEFAULTS"
-		_toast_label.visible = true
-		var tween = create_tween()
-		tween.tween_interval(3.0)
-		tween.tween_callback(func(): _toast_label.visible = false)
+	_show_toast("ALL SETTINGS RESTORED TO FACTORY DEFAULTS")
+
+
+func _show_toast(msg: String, is_error: bool = false) -> void:
+	if not _toast_label or not is_instance_valid(_toast_label):
+		return
+	if _toast_tween and _toast_tween.is_valid():
+		_toast_tween.kill()
+	_toast_label.text = msg
+	_toast_label.add_theme_color_override("font_color", Tokens.SIGNAL if is_error else Tokens.VOLT)
+	_toast_label.visible = true
+	_toast_tween = create_tween()
+	_toast_tween.tween_interval(3.5)
+	_toast_tween.tween_callback(func():
+		if is_instance_valid(_toast_label):
+			_toast_label.visible = false
+	)
 
 func _on_back_pressed() -> void:
 	get_tree().change_scene_to_file("res://Main.tscn")

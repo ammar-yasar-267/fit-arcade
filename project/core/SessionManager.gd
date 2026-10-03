@@ -210,8 +210,9 @@ func _save_history() -> void:
 func _load_best_scores() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(BEST_SCORES_FILE) == OK:
-		for k in cfg.get_section_keys("scores"):
-			_best_scores[k] = cfg.get_value("scores", k, 0)
+		if cfg.has_section("scores"):
+			for k in cfg.get_section_keys("scores"):
+				_best_scores[k] = cfg.get_value("scores", k, 0)
 		var saved_mode: String = str(cfg.get_value("meta", "last_played_mode", ""))
 		if saved_mode != "":
 			last_played_mode = "lane" if saved_mode in ["lane", "switcher"] else saved_mode

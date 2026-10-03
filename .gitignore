@@ -13,3 +13,8 @@ admin/out/
 firebase-debug.log
 .firebase/
 
+# Editor and build temporaries (e.g. Godot Windows DLL locks)
+*.TMP
+*.tmp
+~*
+
